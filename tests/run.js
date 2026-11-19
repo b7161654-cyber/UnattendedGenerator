@@ -289,6 +289,68 @@ test('BypassNRO-Option ist aus Vorgaben und Vorlagen entfernt', function () {
   });
 });
 
+test('Domänenbeitritt steht im specialize-Pass', function () {
+  var xml = build({
+    domainJoin: true, domainName: 'firma.local', domainUser: 'beitritt',
+    domainPassword: 'Geheim!2026', computerName: 'PC-01'
+  });
+  has(xml, 'Microsoft-Windows-UnattendedJoin');
+  has(xml, '<JoinDomain>firma.local</JoinDomain>');
+  has(xml, '<Credentials>');
+  has(xml, '<Username>beitritt</Username>');
+  has(xml, '<Password>Geheim!2026</Password>');
+  hasNot(xml, '<MachineObjectOU>');
+  assertWellFormed(xml);
+
+  var join = xml.indexOf('Microsoft-Windows-UnattendedJoin');
+  assert.ok(join > xml.indexOf('pass="specialize"') && join < xml.indexOf('pass="oobeSystem"'),
+    'Beitritt nicht im specialize-Pass');
+});
+
+test('Domänen-OU und Sonderzeichen werden korrekt geschrieben', function () {
+  var xml = build({
+    domainJoin: true, domainName: 'AD.Firma.de', domainUser: 'join', domainPassword: 'p&ss<1>',
+    domainOu: 'OU=Arbeitsplätze,DC=firma,DC=local', computerName: 'PC-02'
+  });
+  has(xml, '<JoinDomain>ad.firma.de</JoinDomain>');
+  has(xml, '<MachineObjectOU>OU=Arbeitsplätze,DC=firma,DC=local</MachineObjectOU>');
+  has(xml, '<Password>p&amp;ss&lt;1&gt;</Password>');
+  assertWellFormed(xml);
+});
+
+test('Ohne Domänenbeitritt entsteht keine UnattendedJoin-Komponente', function () {
+  hasNot(build({}), 'Microsoft-Windows-UnattendedJoin');
+  hasNot(build({ domainJoin: false, domainName: 'firma.local' }), 'Microsoft-Windows-UnattendedJoin');
+});
+
+test('Domänenbeitritt: Vorabprüfungen für FQDN, OU, Konto und Rechnername', function () {
+  var base = {
+    domainJoin: true, domainName: 'firma.local', domainUser: 'join',
+    domainPassword: 'x', computerName: 'PC-01'
+  };
+  doesNotWarn(warningText(base), 'Domänenbeitritt');
+  warns(warningText(Object.assign({}, base, { domainName: '' })), 'keine Domäne angegeben');
+  warns(warningText(Object.assign({}, base, { domainName: 'firma' })), 'kein gültiger Domänenname');
+  warns(warningText(Object.assign({}, base, { domainName: 'firma..local' })), 'kein gültiger Domänenname');
+  warns(warningText(Object.assign({}, base, { domainUser: '' })), 'fehlen Domänenkonto oder Kennwort');
+  warns(warningText(Object.assign({}, base, { domainPassword: '' })), 'fehlen Domänenkonto oder Kennwort');
+  warns(warningText(Object.assign({}, base, { domainOu: 'Arbeitsplätze' })), 'Distinguished Name');
+  warns(warningText(Object.assign({}, base, { computerName: '' })), 'Zufallsnamen');
+  warns(warningText(Object.assign({}, base, { computerName: '*' })), 'Zufallsnamen');
+  warns(warningText(Object.assign({}, base, { userName: '' })), 'nur die Anmeldung mit einem Domänenkonto');
+  doesNotWarn(warningText(Object.assign({}, base, { userName: '', administratorPassword: 'Srv!2025' })), 'nur die Anmeldung mit einem Domänenkonto');
+});
+
+test('Domänenbeitritt bleibt optional: Standard und Vorlagen in der Arbeitsgruppe', function () {
+  assert.strictEqual(G.defaults().domainJoin, false, 'domainJoin ist in DEFAULTS aktiv');
+  hasNot(build({}), 'Microsoft-Windows-UnattendedJoin');
+  D.presets.forEach(function (preset) {
+    assert.ok(!Object.prototype.hasOwnProperty.call(preset.config, 'domainJoin'),
+      'Vorlage ' + preset.id + ' setzt domainJoin');
+    hasNot(build(preset.config), 'Microsoft-Windows-UnattendedJoin');
+  });
+});
+
 test('System-Tweaks erzeugen passende Registry-Befehle', function () {
   var xml = build({ enableRdp: true, disableTelemetry: true, disableCortana: true, disableFastStartup: true, disableUac: true, numLockOn: true });
   has(xml, 'fDenyTSConnections');

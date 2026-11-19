@@ -71,6 +71,11 @@
     productKey: '',
     oemProductKey: false,
     driverPaths: '',
+    domainJoin: false,
+    domainName: '',
+    domainOu: '',
+    domainUser: '',
+    domainPassword: '',
     computerName: '',
     owner: '',
     organization: '',
@@ -403,6 +408,12 @@
     cfg.organization = str(cfg.organization);
     cfg.productKey = str(cfg.productKey);
     cfg.driverPaths = String(cfg.driverPaths === undefined ? '' : cfg.driverPaths);
+    /* DNS-Namen sind unabhängig von der Groß-/Kleinschreibung; das Kennwort
+       bleibt unverändert, damit Leerzeichen am Rand nicht verschwinden. */
+    cfg.domainName = str(cfg.domainName).toLowerCase();
+    cfg.domainOu = str(cfg.domainOu);
+    cfg.domainUser = str(cfg.domainUser);
+    cfg.domainPassword = String(cfg.domainPassword === undefined ? '' : cfg.domainPassword);
     cfg.specializeCommands = String(cfg.specializeCommands === undefined ? '' : cfg.specializeCommands);
     cfg.firstLogonCommands = String(cfg.firstLogonCommands === undefined ? '' : cfg.firstLogonCommands);
     cfg.administratorPassword = String(cfg.administratorPassword === undefined ? '' : cfg.administratorPassword);
@@ -975,6 +986,26 @@
     ]);
   }
 
+  /* Domänenbeitritt. Microsoft-Windows-UnattendedJoin ist laut
+     Microsoft-Dokumentation nur im specialize-Pass zulässig. Die Reihenfolge
+     innerhalb des Passes bestimmt Windows, nicht die Stellung in der Datei –
+     Skripte, die die Domäne voraussetzen, gehören deshalb nicht hierher. */
+  function unattendedJoin(cfg) {
+    if (!cfg.domainJoin || !cfg.domainName) return null;
+
+    return component('Microsoft-Windows-UnattendedJoin', cfg.architecture, [
+      n('Identification', null, compact([
+        v('JoinDomain', cfg.domainName),
+        cfg.domainOu ? v('MachineObjectOU', cfg.domainOu) : null,
+        n('Credentials', null, [
+          v('Domain', cfg.domainName),
+          v('Username', cfg.domainUser),
+          v('Password', cfg.domainPassword)
+        ])
+      ]))
+    ]);
+  }
+
   /* Baut die vollständige Datei. Die Reihenfolge der Pässe ist fest:
      windowsPE (Setup-Umgebung), specialize (System nach dem Neustart),
      oobeSystem (erste Anmeldung). Neue Komponenten gehören in den Pass,
@@ -988,6 +1019,7 @@
     ]);
 
     var specialize = n('settings', { pass: 'specialize' }, compact([
+      unattendedJoin(cfg),
       shellSetupSpecialize(cfg),
       deploymentSpecialize(cfg),
       cfg.target === 'server'
@@ -1095,6 +1127,20 @@
      Die Funktion ändert nichts und wirft nicht: Sie liefert nur eine Liste
      von Texten für die Oberfläche, die XML-Ausgabe entsteht unabhängig
      davon in buildUnattend(). */
+  /* Vollständiger DNS-Name: mindestens zwei Labels, nur Buchstaben, Ziffern
+     und Bindestriche, kein Bindestrich am Rand, höchstens 253 Zeichen. */
+  function isDomainName(value) {
+    if (value.length > 253 || value.indexOf('.') === -1) return false;
+    return value.split('.').every(function (label) {
+      return /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(label);
+    });
+  }
+
+  /* Organisationseinheit als Distinguished Name: OU=…,DC=…,DC=… */
+  function isDistinguishedName(value) {
+    return /^OU=[^,]+,(?:OU=[^,]+,)*DC=[^,]+(?:,DC=[^,]+)+$/i.test(value.replace(/\s+/g, ''));
+  }
+
   function analyze(input) {
     var cfg = normalize(input);
     var warnings = [];
@@ -1144,6 +1190,25 @@
     if (!isServer(cfg) && !cfg.hideOnlineAccountScreens) {
       warnings.push('Ohne „Microsoft-Konto-Anmeldung überspringen“ kann das OOBE eine Online-Anmeldung verlangen. ' +
         'Der frühere Registry-Wert BypassNRO greift seit Windows 11 24H2 nicht mehr zuverlässig – der belastbare Weg ist das lokale Konto aus der Antwortdatei.');
+    }
+    if (cfg.domainJoin) {
+      if (!cfg.domainName) {
+        warnings.push('Domänenbeitritt ist aktiv, aber keine Domäne angegeben – der Beitritt wird weggelassen.');
+      } else if (!isDomainName(cfg.domainName)) {
+        warnings.push('„' + cfg.domainName + '“ ist kein gültiger Domänenname. Bitte den vollständigen DNS-Namen angeben, z. B. firma.local oder ad.firma.de.');
+      }
+      if (cfg.domainName && (!cfg.domainUser || !cfg.domainPassword)) {
+        warnings.push('Für den Domänenbeitritt fehlen Domänenkonto oder Kennwort – Setup kann nicht beitreten und bricht an dieser Stelle ab.');
+      }
+      if (cfg.domainOu && !isDistinguishedName(cfg.domainOu)) {
+        warnings.push('Die Organisationseinheit muss als Distinguished Name angegeben werden, z. B. OU=Arbeitsplätze,DC=firma,DC=local.');
+      }
+      if (!cfg.computerName || cfg.computerName.indexOf('*') !== -1) {
+        warnings.push('Ohne festen Computernamen legt der Domänenbeitritt ein Konto mit dem Zufallsnamen von Windows an – für die Domäne bitte einen festen Namen bis 15 Zeichen eintragen.');
+      }
+      if (!cfg.userName && !cfg.administratorPassword) {
+        warnings.push('Domänenbeitritt ohne lokales Konto und ohne Administratorkennwort: Danach ist nur die Anmeldung mit einem Domänenkonto möglich. Ohne erreichbaren Domänencontroller kommt niemand auf den Rechner.');
+      }
     }
     if (cfg.editionMode === 'name' && /^\d+$/.test(cfg.editionValue)) {
       warnings.push('Edition wird über den Namen gewählt, der Wert ist aber eine Zahl. Bitte den Image-Namen eintragen (z. B. "Windows 11 Pro").');

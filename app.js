@@ -34,6 +34,7 @@
     'computerName', 'owner', 'organization',
     'uiLanguage', 'systemLocale', 'userLocale', 'inputLocale', 'inputLocale2', 'inputLocale3', 'timezone',
     'diskMode', 'diskId', 'partitionId', 'driverPaths',
+    'domainName', 'domainOu', 'domainUser', 'domainPassword',
     'userName', 'userDisplayName', 'userPassword', 'userGroup',
     'administratorPassword', 'autoLogonCount', 'protectYourPC',
     'nicName', 'ip', 'subnet', 'gateway', 'dns1', 'dns2',
@@ -43,7 +44,7 @@
 
   var BOOL_FIELDS = [
     'acceptEula', 'enableFirewall', 'disableDynamicUpdate', 'wipeDisk',
-    'autoLogon', 'hideEulaPage', 'hideOnlineAccountScreens', 'hideWirelessSetup',
+    'autoLogon', 'domainJoin', 'hideEulaPage', 'hideOnlineAccountScreens', 'hideWirelessSetup',
     'bypassTpm', 'bypassSecureBoot', 'bypassRam', 'bypassCpu',
     'disableConsumerFeatures', 'disableCopilot', 'removeBloatware', 'uninstallOneDrive',
     'disableTelemetry', 'disableCortana', 'disableWebSearch', 'enableRdp',
@@ -278,6 +279,11 @@
 
     var autoLogon = byId('autoLogon').checked;
     byId('autoLogonCount').disabled = !autoLogon;
+
+    var domain = byId('domainJoin').checked;
+    ['domainName', 'domainOu', 'domainUser', 'domainPassword'].forEach(function (id) {
+      lockField(id, !domain);
+    });
 
     var staticIp = byId('staticIp').checked;
     ['nicName', 'ip', 'subnet', 'gateway', 'dns1', 'dns2'].forEach(function (id) {

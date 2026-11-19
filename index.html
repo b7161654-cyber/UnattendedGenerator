@@ -51,6 +51,7 @@
       <a href="#sec-region">Sprache</a>
       <a href="#sec-disk">Datenträger</a>
       <a href="#sec-account">Konto</a>
+      <a href="#sec-domain">Domäne</a>
       <a href="#sec-win11">Windows 11</a>
       <a href="#sec-system">System</a>
       <a href="#sec-tweaks">Optimierungen</a>
@@ -288,6 +289,37 @@
           </select>
         </label>
       </div>
+    </section>
+
+    <section class="card" id="sec-domain">
+      <h2>Domäne</h2>
+      <div class="grid">
+        <label class="check wide">
+          <input type="checkbox" id="domainJoin">
+          <span>Rechner der Domäne hinzufügen</span>
+        </label>
+        <label class="field">
+          <span>Domäne (FQDN)</span>
+          <input type="text" id="domainName" placeholder="firma.local" autocomplete="off">
+          <small>Vollständiger DNS-Name, nicht der NetBIOS-Name.</small>
+        </label>
+        <label class="field">
+          <span>Domänenkonto</span>
+          <input type="text" id="domainUser" placeholder="beitritt" autocomplete="off">
+          <small>Konto, das Computerkonten anlegen darf.</small>
+        </label>
+        <label class="field">
+          <span>Kennwort des Domänenkontos</span>
+          <input type="password" id="domainPassword" autocomplete="new-password">
+          <small>Wird im Klartext in die XML geschrieben.</small>
+        </label>
+        <label class="field wide">
+          <span>Organisationseinheit (optional)</span>
+          <input type="text" id="domainOu" placeholder="OU=Arbeitsplätze,DC=firma,DC=local" autocomplete="off">
+          <small>Leer = Standardcontainer „Computers“ der Domäne.</small>
+        </label>
+      </div>
+      <p class="hint hint-foot">Der Beitritt läuft im <code>specialize</code>-Pass über <code>Microsoft-Windows-UnattendedJoin</code>. Schlägt er fehl, bricht das Setup an dieser Stelle ab – Domäne, Konto und Kennwort vorher prüfen.</p>
     </section>
 
     <section class="card" id="sec-win11">

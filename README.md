@@ -11,6 +11,7 @@ Erzeugt eine `autounattend.xml` für die unbeaufsichtigte Installation von Windo
 - Datenträger: GPT/UEFI oder MBR/BIOS neu anlegen, auf vorhandene Partition oder auf die erste freie Partition installieren
 - Zusätzliche Treiberordner: Setup übernimmt entpackte Treiber vom Medium ins installierte Windows (Details unter „Treiber vom Installationsmedium“)
 - Lokale Konten, Administratorkennwort, automatische Anmeldung, OOBE-Seiten ausblenden
+- Domänenbeitritt mit Domänenkonto und optionaler Organisationseinheit (Details unter „Domänenbeitritt“)
 - Produktschlüssel: eigener Schlüssel, Auswahl aus den offiziellen KMS-Clientschlüsseln (GVLK, Details unter „Volumenlizenz-Schlüssel (KMS)“) oder Schlüssel aus BIOS/UEFI (OEM), bei dem bewusst kein Schlüssel in der Datei steht
 - Windows-11-Bypässe (TPM, Secure Boot, RAM, CPU)
 - Registry-Eingriffe zu Telemetrie, Cortana, Websuche, Copilot, RDP, UAC, Schnellstart, OneDrive und vorinstallierten Apps
@@ -69,6 +70,22 @@ Der frühere Registry-Wert `BypassNRO` wird bewusst nicht mehr geschrieben. Micr
 - Voraussetzung ist ein Benutzername im Konto-Bereich; ohne ihn fragt Setup die Zugangsdaten selbst ab.
 - Ist „Microsoft-Konto-Anmeldung überspringen“ abgeschaltet, warnt der Generator: Das OOBE kann dann trotz lokalem Konto eine Online-Anmeldung verlangen.
 - Auf Windows 10 und älteren Windows-11-Builds funktioniert derselbe Weg; ein zusätzlicher Registry-Eintrag ist dort nicht nötig, weil das lokale Konto ohnehin aus der Datei kommt.
+
+## Domänenbeitritt
+
+Mit „Rechner der Domäne hinzufügen“ schreibt der Generator `Microsoft-Windows-UnattendedJoin` in den `specialize`-Pass.
+
+- **Domäne** vollständig als DNS-Name (`firma.local`, `ad.firma.de`), nicht als NetBIOS-Name.
+- **Domänenkonto** mit dem Recht, Computerkonten anzulegen, plus Kennwort. Beides steht im Klartext in der Datei (siehe „Klartext-Kennwörter“).
+- **Organisationseinheit** optional als Distinguished Name (`OU=Arbeitsplätze,DC=firma,DC=local`). Leer landet der Rechner im Standardcontainer `Computers`.
+- **Computername** sollte fest gesetzt sein. Ohne ihn vergibt Windows einen Zufallsnamen, der als Computerkonto in der Domäne landet.
+- Schlägt der Beitritt fehl (falsche Domäne, gesperrtes Konto, kein Netz), bricht das Setup im `specialize`-Pass ab. Das ist Absicht: Eine halbfertige Installation ohne Domäne wäre schwerer zu reparieren.
+- Ein lokales Konto oder ein Administratorkennwort bleibt sinnvoll. Ohne erreichbaren Domänencontroller kommt man sonst nicht auf den Rechner; der Generator warnt, wenn beides fehlt.
+- Die Reihenfolge innerhalb des `specialize`-Passes legt Windows fest, nicht die Stellung in der Datei. Skripte, die eine Domänenmitgliedschaft voraussetzen, gehören deshalb in `FirstLogonCommands` (nach der Anmeldung) und nicht in denselben Pass.
+
+Geprüft werden FQDN-Form, Distinguished Name, vorhandenes Domänenkonto und ein fester Rechnername. Ein echter Beitritt gegen einen Domänencontroller war hier **nicht möglich** (kein AD, kein Hypervisor) – bitte einmal in der eigenen Testumgebung gegenprüfen.
+
+Ohne Häkchen enthält die Datei keine `UnattendedJoin`-Komponente, und der Rechner bleibt in der Arbeitsgruppe.
 
 ## Vor dem Einsatz prüfen
 
