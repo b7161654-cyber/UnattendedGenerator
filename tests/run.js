@@ -442,6 +442,127 @@ test('Vorlagen setzen nur bekannte Schlüssel und vorhandene Profile', function 
   });
 });
 
+/* ------------------------------------------------------------ Meldung → Feld */
+
+/* Index der schließenden Klammer zu source[openIndex]. Zeichenketten und
+   Escapes werden übersprungen, damit Klammern im Meldungstext nicht stören. */
+function findClosing(source, openIndex, open, close) {
+  var depth = 0;
+  var quote = null;
+  for (var i = openIndex; i < source.length; i += 1) {
+    var ch = source.charAt(i);
+    if (quote) {
+      if (ch === '\\') { i += 1; continue; }
+      /* Literale laufen hier nie über das Zeilenende; ein Anführungszeichen in
+         einer Regex-Zeichenklasse darf den Zähler also nicht verstellen. */
+      if (ch === '\n') quote = null;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"') { quote = ch; continue; }
+    if (ch === open) depth += 1;
+    else if (ch === close) {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/* Argumente des Aufrufs, dessen öffnende Klammer an openIndex steht. */
+function callArguments(source, openIndex) {
+  var closeIndex = findClosing(source, openIndex, '(', ')');
+  assert.notStrictEqual(closeIndex, -1, 'Aufruf nicht geschlossen');
+  var args = [];
+  var current = '';
+  var depth = 0;
+  var quote = null;
+  for (var i = openIndex + 1; i < closeIndex; i += 1) {
+    var ch = source.charAt(i);
+    if (quote) {
+      current += ch;
+      if (ch === '\\') { current += source.charAt(i + 1); i += 1; continue; }
+      if (ch === '\n') quote = null;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"') { quote = ch; current += ch; continue; }
+    if (ch === '(' || ch === '[' || ch === '{') depth += 1;
+    else if (ch === ')' || ch === ']' || ch === '}') depth -= 1;
+    if (ch === ',' && depth === 0) { args.push(current.trim()); current = ''; continue; }
+    current += ch;
+  }
+  args.push(current.trim());
+  return args;
+}
+
+/* Jede Meldung im Generator muss ihr Feld als id nennen – daran hängt der
+   Sprung in der Oberfläche. Geprüft wird der Quelltext, damit auch Meldungen
+   erfasst werden, die keine Testkonfiguration auslöst. */
+test('Jede Meldung nennt das Feld, das sie ausgelöst hat', function () {
+  var start = generatorSource.indexOf('function collectIssues(input) {');
+  assert.notStrictEqual(start, -1, 'collectIssues nicht gefunden');
+  /* Ende ist die einzige Rückgabe der Funktion – robuster als Klammerzählen,
+     weil Anführungszeichen in Regex-Zeichenklassen sonst stören. */
+  var bodyEnd = generatorSource.indexOf('\n    return issues;', start);
+  assert.ok(bodyEnd > start, 'Ende von collectIssues nicht gefunden');
+  var body = generatorSource.slice(start, bodyEnd);
+
+  var known = fieldIds('TEXT_FIELDS').concat(fieldIds('BOOL_FIELDS'));
+  var checked = 0;
+  var pattern = /\b(add|warn)\(/g;
+  var match;
+  while ((match = pattern.exec(body)) !== null) {
+    /* Die beiden Helfer selbst sind keine Meldungen. */
+    if (body.slice(Math.max(0, match.index - 9), match.index) === 'function ') continue;
+    var args = callArguments(body, match.index + match[0].length - 1);
+    var wanted = match[1] === 'add' ? 3 : 2;
+    assert.strictEqual(args.length, wanted,
+      match[1] + '() braucht ' + wanted + ' Argumente, nicht ' + args.length + ': ' + args.join(' | ').slice(0, 140));
+    var literal = /^'([A-Za-z][A-Za-z0-9]*)'$/.exec(args[args.length - 1]);
+    assert.ok(literal, 'Das Feld muss als id in Anführungszeichen stehen: ' + args[args.length - 1].slice(0, 80));
+    assert.ok(known.indexOf(literal[1]) !== -1, '„' + literal[1] + '“ ist kein Feld aus app.js');
+    assert.ok(htmlSource.indexOf('id="' + literal[1] + '"') !== -1, 'index.html hat kein Feld „' + literal[1] + '“');
+    checked += 1;
+  }
+  assert.ok(checked > 40, 'zu wenige Meldungen geprüft: ' + checked);
+});
+
+/* Stichprobe quer durch die Prüfungen: Die Meldung zeigt auf das Feld, an dem
+   der Fehler behoben wird – nicht auf ein Nachbarfeld. */
+test('Meldungen zeigen auf das Feld, das sie verursacht', function () {
+  var base = {
+    target: 'windows10', diskMode: 'gpt', acceptEula: true, productKey: 'X',
+    userName: 'u', userPassword: 'p', administratorPassword: 'p',
+    hideOnlineAccountScreens: true
+  };
+  function cfg(overrides) { return Object.assign({}, base, overrides); }
+
+  function fieldFor(config, needle) {
+    var hits = G.issues(config).filter(function (item) { return item.text.indexOf(needle) !== -1; });
+    assert.strictEqual(hits.length, 1, 'erwartet genau eine Meldung mit „' + needle + '“');
+    return hits[0].field;
+  }
+
+  assert.strictEqual(fieldFor(cfg({ target: 'windows11', architecture: 'x86' }), 'nur für x64 und ARM64'), 'architecture');
+  assert.strictEqual(fieldFor(cfg({ target: 'windows11', diskMode: 'mbr' }), 'UEFI mit GPT'), 'diskMode');
+  assert.strictEqual(fieldFor(cfg({ acceptEula: false }), 'Lizenzseite'), 'acceptEula');
+  assert.strictEqual(fieldFor(cfg({ autoLogon: true, userName: '' }), 'kein Benutzername'), 'userName');
+  assert.strictEqual(fieldFor(cfg({ staticIp: true }), 'keine IP-Adresse'), 'ip');
+  assert.strictEqual(fieldFor(cfg({ userName: 'Administrator' }), 'reservierter Kontoname'), 'userName');
+  assert.strictEqual(fieldFor(cfg({ domainJoin: true }), 'keine Domäne angegeben'), 'domainName');
+  assert.strictEqual(fieldFor(cfg({ domainJoin: true, domainName: 'firma.local' }), 'fehlen Domänenkonto'), 'domainUser');
+  assert.strictEqual(fieldFor(cfg({ domainJoin: true, domainName: 'firma.local', domainUser: 'u', domainPassword: 'p', domainOu: 'falsch' }), 'Organisationseinheit'), 'domainOu');
+  assert.strictEqual(fieldFor(cfg({ lockoutMode: 'custom', lockoutWindow: '30', lockoutDuration: '15' }), 'Sperrfenster'), 'lockoutWindow');
+  assert.strictEqual(fieldFor(cfg({ specializeScript: 'x'.repeat(4000) }), 'specialize-Skript'), 'specializeScript');
+  assert.strictEqual(fieldFor(cfg({ target: 'server', architecture: 'x86' }), 'Windows Server 2016 und neuer'), 'architecture');
+
+  /* Dieselbe id muss im Formular liegen – sonst läuft der Sprung ins Leere. */
+  G.issues(cfg({ domainJoin: true, domainName: 'firma' })).forEach(function (item) {
+    assert.strictEqual(typeof item.field, 'string', 'Meldung ohne Feld: ' + item.text);
+  });
+});
+
 test('System-Tweaks erzeugen passende Registry-Befehle', function () {
   var xml = build({ enableRdp: true, disableTelemetry: true, disableCortana: true, disableFastStartup: true, disableUac: true, numLockOn: true });
   has(xml, 'fDenyTSConnections');

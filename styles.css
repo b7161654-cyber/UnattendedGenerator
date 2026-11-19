@@ -298,6 +298,34 @@ select {
 .warnings li.is-error .issue-level { background: rgba(255, 96, 96, 0.28); color: #ffb3b3; }
 .warnings li.is-hint { color: #c3d0de; }
 .warnings li.is-hint .issue-level { background: rgba(140, 170, 200, 0.2); color: #c3d0de; }
+.issue-text { flex: 1 1 auto; }
+.issue-jump {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px dotted currentColor;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.issue-jump:hover { text-decoration: underline; }
+.issue-jump:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+/* Ziel eines Meldungsklicks: kurz umrandet und eingefärbt. */
+.field.is-flash, .check.is-flash {
+  border-radius: 6px;
+  outline: 2px solid transparent;
+  outline-offset: 4px;
+  animation: field-flash 1.6s ease-out;
+}
+@keyframes field-flash {
+  0%, 55% { outline-color: var(--accent); background: rgba(77, 163, 255, 0.12); }
+  100% { outline-color: transparent; background: transparent; }
+}
 
 .issue-summary { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 5px 0 0; font-size: 12px; }
 .badge {

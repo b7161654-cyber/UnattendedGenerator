@@ -40,7 +40,9 @@ Die Seite verwendet bewusst klassische `<script>`-Tags statt ES-Modulen, damit s
 - **Warnungen** (gelb) – ein Risiko, aber die Datei läuft: Autologon ohne Kennwort, Partition ohne Löschen, Server ohne Administratorkennwort, Sperrfenster größer als die Sperrdauer.
 - **Hinweise** (blau) – Erklärungen ohne Handlungsbedarf: GVLK aktiviert nur gegen einen KMS-Host, LTSC-Optionen laufen ins Leere, ohne Produktschlüssel fragt das Setup nach dem Schlüssel, ohne `AcceptEula` hält es an der Lizenzseite an.
 
-Im Code liefert `UnattendGenerator.issues(cfg)` die Objekte mit `level` (`error`, `warn`, `hint`) und `text`; `analyze(cfg)` gibt weiterhin nur die Texte zurück. Die Schweregrade stehen direkt an der jeweiligen Prüfung in `generator.js`.
+Jede Meldung nennt außerdem das Feld, das sie ausgelöst hat: Ein Klick (oder Enter) springt dorthin und hebt die Zeile kurz hervor, damit der Fehler gleich behoben werden kann.
+
+Im Code liefert `UnattendGenerator.issues(cfg)` die Objekte mit `level` (`error`, `warn`, `hint`), `text` und `field` (die id des betroffenen Feldes); `analyze(cfg)` gibt weiterhin nur die Texte zurück. Die Schweregrade und Felder stehen direkt an der jeweiligen Prüfung in `generator.js`; ein Test hält fest, dass jede Meldung ein vorhandenes Feld nennt.
 
 ## Datei auf das Installationsmedium legen
 

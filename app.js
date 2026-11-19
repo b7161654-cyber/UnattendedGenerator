@@ -321,7 +321,8 @@
     return list.some(function (item) { return item.level === 'error'; });
   }
 
-  /* Meldungen mit Schweregrad: Fehler rot, Warnungen gelb, Hinweise blau. */
+  /* Meldungen mit Schweregrad: Fehler rot, Warnungen gelb, Hinweise blau.
+     Meldungen mit Feld-id sind Knöpfe und springen zum betroffenen Feld. */
   function renderIssues(list) {
     if (!list.length) {
       warningsBox.hidden = true;
@@ -332,10 +333,48 @@
     warningsBox.hidden = false;
     warningsBox.className = 'warnings' + (hasErrors(list) ? ' has-errors' : '');
     warningsBox.innerHTML = '<ul>' + list.map(function (item) {
+      var body = item.field
+        ? '<button type="button" class="issue-jump" data-field="' + G.escape(item.field) + '" ' +
+          'title="Zum betroffenen Feld springen">' + G.escape(item.text) + '</button>'
+        : '<span class="issue-text">' + G.escape(item.text) + '</span>';
       return '<li class="issue is-' + item.level + '">' +
-        '<span class="issue-level">' + LEVEL_LABELS[item.level] + '</span>' +
-        '<span>' + G.escape(item.text) + '</span></li>';
+        '<span class="issue-level">' + LEVEL_LABELS[item.level] + '</span>' + body + '</li>';
     }).join('') + '</ul>';
+  }
+
+  /* ------------------------------------------------------------ Sprung zum Feld */
+
+  var highlightTimer = null;
+  var highlightedRow = null;
+
+  /* Feld aufdecken, hinscrollen, fokussieren und kurz hervorheben. */
+  function jumpToField(id) {
+    var input = byId(id);
+    if (!input) return false;
+    /* Hervorgehoben wird die ganze Zeile, nicht nur das Eingabeelement. */
+    var row = (input.closest && input.closest('.field, .check')) || input;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    try { input.focus({ preventScroll: true }); } catch (error) { input.focus(); }
+
+    /* Die vorherige Zeile zuerst aufräumen, sonst bliebe sie markiert. */
+    if (highlightTimer) {
+      clearTimeout(highlightTimer);
+      highlightTimer = null;
+    }
+    if (highlightedRow && highlightedRow !== row) highlightedRow.classList.remove('is-flash');
+
+    row.classList.remove('is-flash');
+    /* Reflow erzwingen, damit die Animation bei jedem Klick neu startet. */
+    void row.offsetWidth;
+    row.classList.add('is-flash');
+    highlightedRow = row;
+
+    highlightTimer = setTimeout(function () {
+      row.classList.remove('is-flash');
+      if (highlightedRow === row) highlightedRow = null;
+      highlightTimer = null;
+    }, 1800);
+    return true;
   }
 
   /* Ampel über der Vorschau: zählt die Meldungen und nennt den Grund für die Sperre. */
@@ -541,6 +580,13 @@
     });
 
     byId('btnCopy').addEventListener('click', copyXml);
+
+    /* Klick (oder Enter) auf eine Meldung springt zum betroffenen Feld. */
+    warningsBox.addEventListener('click', function (event) {
+      var trigger = event.target.closest ? event.target.closest('[data-field]') : null;
+      if (!trigger) return;
+      jumpToField(trigger.getAttribute('data-field'));
+    });
 
     byId('btnExportConfig').addEventListener('click', function () {
       download('unattend-config.json', JSON.stringify(readForm(), null, 2), 'application/json');
