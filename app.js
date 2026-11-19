@@ -539,9 +539,21 @@
     });
   }
 
+  /* Auf dem Handy liegt die Vorschau weit unter dem Formular. Der schwebende
+     Knopf springt dorthin und verschwindet, sobald die Vorschau sichtbar ist. */
+  function bindPreviewJump() {
+    var jump = byId('previewJump');
+    var previewColumn = byId('preview');
+    if (!jump || !previewColumn || typeof IntersectionObserver !== 'function') return;
+    new IntersectionObserver(function (entries) {
+      jump.classList.toggle('is-hidden', entries[0].isIntersecting);
+    }).observe(previewColumn);
+  }
+
   buildSelects();
   bind();
   buildQuickProfiles();
+  bindPreviewJump();
 
   if (!loadStored()) {
     presetSelect.value = D.presets[0].id;

@@ -26,6 +26,8 @@ Erzeugt eine `autounattend.xml` für die unbeaufsichtigte Installation von Windo
 3. Vorlage wählen oder Felder ausfüllen. Die Vorschau rechts aktualisiert sich bei jeder Änderung.
 4. Auf **Herunterladen** klicken: Es entsteht `autounattend.xml`.
 
+Die Oberfläche ist für schmale Bildschirme optimiert: einspaltiges Formular, mindestens 44 px hohe Tippflächen, 16-px-Felder gegen das automatische Zoomen auf iOS, waagerecht scrollbare Sprungmarken und ein schwebender Knopf "Vorschau & Download", der zur XML-Vorschau springt und verschwindet, sobald sie sichtbar ist.
+
 Die Seite verwendet bewusst klassische `<script>`-Tags statt ES-Modulen, damit sie auch über `file://` funktioniert. Alle Daten bleiben im Browser; die Konfiguration wird lediglich im `localStorage` gespeichert und lässt sich dort über **Zurücksetzen** wieder verwerfen.
 
 ## Datei auf das Installationsmedium legen
