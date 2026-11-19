@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unattend-Generator – autounattend.xml lokal erzeugen</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233f95f5'/%3E%3Ctext x='16' y='23' font-family='Segoe UI,Arial' font-size='19' font-weight='700' fill='white' text-anchor='middle'%3EU%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">U</div>
+    <div>
+      <h1>Unattend-Generator</h1>
+      <p>autounattend.xml für Windows 10, Windows 11 und Windows Server – vollständig lokal, ohne Abhängigkeiten.</p>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <label class="inline">
+      <span>Vorlage</span>
+      <select id="presetSelect"></select>
+    </label>
+    <button type="button" id="btnExportConfig" class="btn ghost">Konfiguration sichern</button>
+    <label class="btn ghost file">
+      Konfiguration laden
+      <input type="file" id="importConfig" accept="application/json,.json" hidden>
+    </label>
+    <button type="button" id="btnReset" class="btn ghost">Zurücksetzen</button>
+  </div>
+</header>
+
+<main class="layout">
+
+  <form id="configForm" class="column form" autocomplete="off" novalidate>
+
+    <section class="card">
+      <h2>Zielsystem</h2>
+      <div class="grid">
+        <label class="field">
+          <span>Zielversion</span>
+          <select id="target">
+            <option value="windows11">Windows 11</option>
+            <option value="windows10">Windows 10</option>
+            <option value="server">Windows Server</option>
+          </select>
+          <small>Steuert Server-spezifische Komponenten und Prüfungen.</small>
+        </label>
+        <label class="field">
+          <span>Architektur</span>
+          <select id="architecture">
+            <option value="amd64">x64 (amd64)</option>
+            <option value="x86">x86 (32 Bit)</option>
+            <option value="arm64">ARM64</option>
+          </select>
+        </label>
+        <label class="field" id="serverVersionField">
+          <span>Server-Version</span>
+          <select id="serverVersion"></select>
+          <small>Nur bei Zielversion „Windows Server“.</small>
+        </label>
+        <label class="field" id="serverEditionField">
+          <span>Server-Edition</span>
+          <select id="serverEdition"></select>
+        </label>
+        <label class="field" id="serverInstallTypeField">
+          <span>Installationsvariante</span>
+          <select id="serverInstallType"></select>
+          <small>Server Core ohne GUI, Desktop Experience mit Oberfläche.</small>
+        </label>
+        <label class="field">
+          <span>Edition</span>
+          <select id="editionMode">
+            <option value="index">Nach Index (z. B. 1)</option>
+            <option value="name">Nach Name (z. B. Windows 11 Pro)</option>
+            <option value="choose">Setup fragen lassen</option>
+          </select>
+        </label>
+        <label class="field wide" id="editionPresetField">
+          <span>Edition-Vorlage (LTSC / IoT)</span>
+          <select id="editionPreset"></select>
+          <small>Setzt Image-Namen und Zielversion. Der Name bleibt editierbar, muss aber exakt dem Image auf dem Medium entsprechen.</small>
+        </label>
+        <label class="field wide">
+          <span>Index oder Name</span>
+          <input type="text" id="editionValue" value="1" placeholder="1">
+          <small>Bei „Setup fragen lassen“ wird dieser Wert ignoriert. Bei Server wird der Image-Name aus Version, Edition und Variante erzeugt.</small>
+        </label>
+        <label class="field wide">
+          <span>Produktschlüssel (optional)</span>
+          <input type="text" id="productKey" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX">
+          <small>Leer lassen, wenn Setup fragen soll. Bei „Setup fragen lassen“ wird ein Platzhalter eingetragen, damit die Seite erscheint.</small>
+        </label>
+        <label class="field">
+          <span>Computername</span>
+          <input type="text" id="computerName" maxlength="15" placeholder="z. B. PC-01">
+          <small>Leer = Setup generiert einen Namen.</small>
+        </label>
+        <label class="field">
+          <span>Registrierter Benutzer</span>
+          <input type="text" id="owner" placeholder="Name">
+        </label>
+        <label class="field">
+          <span>Organisation</span>
+          <input type="text" id="organization" placeholder="Firma">
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Sprache &amp; Region</h2>
+      <div class="grid">
+        <label class="field">
+          <span>Setup- und Systemsprache</span>
+          <select id="uiLanguage"></select>
+        </label>
+        <label class="field">
+          <span>Systemgebietsschema</span>
+          <select id="systemLocale"></select>
+        </label>
+        <label class="field">
+          <span>Benutzergebietsschema</span>
+          <select id="userLocale"></select>
+        </label>
+        <label class="field">
+          <span>Tastaturlayout</span>
+          <select id="inputLocale"></select>
+        </label>
+        <label class="field wide">
+          <span>Zeitzone</span>
+          <select id="timezone"></select>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Installation &amp; Datenträger</h2>
+      <div class="grid">
+        <label class="field wide">
+          <span>Datenträger</span>
+          <select id="diskMode">
+            <option value="gpt">Datenträger löschen und GPT anlegen (UEFI)</option>
+            <option value="mbr">Datenträger löschen und MBR anlegen (BIOS/Legacy)</option>
+            <option value="partition">Auf vorhandene Partition installieren</option>
+            <option value="existing">Auf die erste freie Partition installieren</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Datenträger-ID</span>
+          <input type="text" id="diskId" value="0" inputmode="numeric">
+          <small>0 = erster Datenträger.</small>
+        </label>
+        <label class="field" id="partitionField">
+          <span>Partitions-ID</span>
+          <input type="text" id="partitionId" value="3" inputmode="numeric">
+          <small>Nur bei „vorhandene Partition“.</small>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="wipeDisk" checked>
+          <span>Datenträger vor der Installation löschen</span>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="acceptEula" checked>
+          <span>Lizenzbedingungen automatisch akzeptieren</span>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="enableFirewall" checked>
+          <span>Windows-Firewall aktivieren</span>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="disableDynamicUpdate" checked>
+          <span>Setup-Updates aus dem Internet überspringen</span>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Konto, Anmeldung &amp; OOBE</h2>
+      <div class="grid">
+        <label class="field">
+          <span>Benutzername</span>
+          <input type="text" id="userName" value="Benutzer" maxlength="20">
+          <small>Leer = kein lokales Konto anlegen.</small>
+        </label>
+        <label class="field">
+          <span>Anzeigename</span>
+          <input type="text" id="userDisplayName" placeholder="optional">
+        </label>
+        <label class="field">
+          <span>Kennwort des Kontos</span>
+          <input type="text" id="userPassword" placeholder="optional">
+          <small>Wird im Klartext in die XML geschrieben.</small>
+        </label>
+        <label class="field">
+          <span>Gruppe</span>
+          <select id="userGroup">
+            <option value="Administrators">Administratoren</option>
+            <option value="Users">Benutzer</option>
+            <option value="Guests">Gäste</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Kennwort des integrierten Administrators</span>
+          <input type="text" id="administratorPassword" placeholder="optional">
+        </label>
+        <label class="check">
+          <input type="checkbox" id="autoLogon">
+          <span>Automatisch anmelden</span>
+        </label>
+        <label class="field">
+          <span>Anmeldeversuche</span>
+          <input type="text" id="autoLogonCount" value="1" inputmode="numeric">
+          <small>1 = einmal anmelden und Autologon danach entfernen.</small>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="hideEulaPage" checked>
+          <span>EULA-Seite ausblenden</span>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="hideOnlineAccountScreens" checked>
+          <span>Microsoft-Konto-Anmeldung überspringen</span>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="hideWirelessSetup" checked>
+          <span>WLAN-Einrichtung im OOBE überspringen</span>
+        </label>
+        <label class="field">
+          <span>Schutz-Einstellungen (ProtectYourPC)</span>
+          <select id="protectYourPC">
+            <option value="1">1 – Express-Einstellungen verwenden</option>
+            <option value="2">2 – Nur wichtige Updates installieren</option>
+            <option value="3" selected>3 – Nicht fragen, nichts vorkonfigurieren</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Windows-11-Setup-Anpassungen</h2>
+      <p class="hint">Hebelt die Hardwareprüfung aus und hält das OOBE schlank. Greift nur beim Setup, nicht im laufenden System.</p>
+      <div class="grid">
+        <label class="check"><input type="checkbox" id="bypassTpm" checked><span>TPM-Pflicht umgehen</span></label>
+        <label class="check"><input type="checkbox" id="bypassSecureBoot" checked><span>Secure-Boot-Pflicht umgehen</span></label>
+        <label class="check"><input type="checkbox" id="bypassRam" checked><span>RAM-Prüfung umgehen</span></label>
+        <label class="check"><input type="checkbox" id="bypassCpu" checked><span>CPU-Prüfung umgehen</span></label>
+        <label class="check"><input type="checkbox" id="bypassMsAccount" checked><span>Microsoft-Konto-Zwang umgehen (BypassNRO)</span></label>
+        <label class="check"><input type="checkbox" id="disableConsumerFeatures" checked><span>Werbe- und Vorschlagsinhalte abschalten</span></label>
+        <label class="check"><input type="checkbox" id="disableCopilot"><span>Copilot deaktivieren</span></label>
+        <label class="check"><input type="checkbox" id="removeBloatware"><span>Vorinstallierte Apps entfernen (Xbox, Bing-Apps, Solitaire …)</span></label>
+        <label class="check"><input type="checkbox" id="uninstallOneDrive"><span>OneDrive entfernen</span></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>System, Datenschutz &amp; Dienste</h2>
+      <div class="grid">
+        <label class="check"><input type="checkbox" id="disableTelemetry"><span>Telemetrie auf Minimum setzen</span></label>
+        <label class="check"><input type="checkbox" id="disableCortana"><span>Cortana deaktivieren</span></label>
+        <label class="check"><input type="checkbox" id="disableWebSearch"><span>Websuche im Startmenü abschalten</span></label>
+        <label class="check"><input type="checkbox" id="enableRdp"><span>Remotedesktop aktivieren (Port 3389)</span></label>
+        <label class="check"><input type="checkbox" id="disableFastStartup"><span>Schnellstart deaktivieren</span></label>
+        <label class="check"><input type="checkbox" id="disableUac"><span>Benutzerkontensteuerung (UAC) abschalten</span></label>
+        <label class="check"><input type="checkbox" id="numLockOn"><span>NumLock bei der Anmeldung aktivieren</span></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Weitere Optimierungen</h2>
+      <p class="hint">Übernommen aus dem C#-Generator von Christoph Schneegans (MIT-Lizenz).</p>
+      <div class="grid">
+        <label class="check"><input type="checkbox" id="disableSac"><span>Smart App Control abschalten</span></label>
+        <label class="check"><input type="checkbox" id="disableSmartScreen"><span>SmartScreen abschalten</span></label>
+        <label class="check"><input type="checkbox" id="enableLongPaths"><span>Lange Pfade (über 260 Zeichen) erlauben</span></label>
+        <label class="check"><input type="checkbox" id="preventAutomaticReboot"><span>Neustart nach Updates verhindern</span></label>
+        <label class="check"><input type="checkbox" id="preventDeviceEncryption"><span>Automatische BitLocker-Geräteverschlüsselung verhindern</span></label>
+        <label class="check"><input type="checkbox" id="allowPowerShellScripts"><span>PowerShell-Skripte erlauben (RemoteSigned)</span></label>
+        <label class="check"><input type="checkbox" id="disableLastAccess"><span>Letzten Zugriffszeitpunkt nicht mehr schreiben</span></label>
+        <label class="check"><input type="checkbox" id="hideEdgeFre"><span>Edge-Erstlauf ausblenden</span></label>
+        <label class="check"><input type="checkbox" id="disableEdgeStartupBoost"><span>Edge-Startup-Boost abschalten</span></label>
+        <label class="check"><input type="checkbox" id="deleteEdgeDesktopIcon"><span>Edge-Verknüpfung vom Desktop entfernen</span></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Desktop nach der ersten Anmeldung</h2>
+      <p class="hint">Läuft als FirstLogonCommand im Kontext des angemeldeten Benutzers.</p>
+      <div class="grid">
+        <label class="check"><input type="checkbox" id="showFileExtensions"><span>Dateiendungen anzeigen</span></label>
+        <label class="check"><input type="checkbox" id="darkMode"><span>Dunkles Design aktivieren</span></label>
+        <label class="check"><input type="checkbox" id="disableWidgets"><span>Widgets in der Taskleiste ausblenden</span></label>
+        <label class="check"><input type="checkbox" id="classicContextMenu"><span>Klassisches Kontextmenü (Windows 11)</span></label>
+        <label class="check"><input type="checkbox" id="leftTaskbar"><span>Taskleiste links ausrichten</span></label>
+        <label class="check"><input type="checkbox" id="hideTaskViewButton"><span>Task-Ansicht-Button ausblenden</span></label>
+        <label class="check"><input type="checkbox" id="disableAppSuggestions"><span>App-Vorschläge und Werbeeinblendungen abschalten</span></label>
+        <label class="check"><input type="checkbox" id="disableSystemRestore"><span>Systemwiederherstellung abschalten</span></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Kontorichtlinien</h2>
+      <p class="hint">Gilt für alle lokalen Konten des Rechners (net accounts), gesetzt im specialize-Pass.</p>
+      <div class="grid">
+        <label class="field">
+          <span>Kennwortablauf</span>
+          <select id="passwordMode">
+            <option value="default">Standard (42 Tage)</option>
+            <option value="unlimited">Läuft nie ab</option>
+            <option value="custom">Benutzerdefiniert</option>
+          </select>
+        </label>
+        <label class="field" id="passwordMaxAgeField">
+          <span>Maximales Alter in Tagen</span>
+          <input type="text" id="passwordMaxAge" value="42" inputmode="numeric">
+        </label>
+        <label class="field">
+          <span>Kontosperrung</span>
+          <select id="lockoutMode">
+            <option value="default">Standard</option>
+            <option value="disabled">Deaktiviert</option>
+            <option value="custom">Benutzerdefiniert</option>
+          </select>
+        </label>
+        <label class="field" id="lockoutThresholdField">
+          <span>Fehlversuche bis zur Sperre</span>
+          <input type="text" id="lockoutThreshold" value="10" inputmode="numeric">
+        </label>
+        <label class="field" id="lockoutDurationField">
+          <span>Sperrdauer in Minuten</span>
+          <input type="text" id="lockoutDuration" value="30" inputmode="numeric">
+        </label>
+        <label class="field" id="lockoutWindowField">
+          <span>Sperrfenster in Minuten</span>
+          <input type="text" id="lockoutWindow" value="30" inputmode="numeric">
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Netzwerk</h2>
+      <div class="grid">
+        <label class="check wide"><input type="checkbox" id="staticIp"><span>Statische IPv4-Konfiguration setzen</span></label>
+        <label class="field">
+          <span>Adaptername</span>
+          <input type="text" id="nicName" value="Ethernet" placeholder="Ethernet">
+        </label>
+        <label class="field">
+          <span>IP-Adresse</span>
+          <input type="text" id="ip" placeholder="192.168.1.50">
+        </label>
+        <label class="field">
+          <span>Subnetzmaske</span>
+          <input type="text" id="subnet" value="255.255.255.0">
+        </label>
+        <label class="field">
+          <span>Gateway</span>
+          <input type="text" id="gateway" placeholder="192.168.1.1">
+        </label>
+        <label class="field">
+          <span>DNS 1</span>
+          <input type="text" id="dns1" placeholder="192.168.1.1">
+        </label>
+        <label class="field">
+          <span>DNS 2</span>
+          <input type="text" id="dns2" placeholder="optional">
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Eigene Befehle</h2>
+      <div class="grid">
+        <label class="field wide">
+          <span>Befehle im Pass „specialize“ (als SYSTEM)</span>
+          <textarea id="specializeCommands" rows="5" placeholder="reg add &quot;HKLM\...&quot; /v Wert /t REG_DWORD /d 1 /f"></textarea>
+          <small>Ein Befehl pro Zeile. Zeilen mit # werden ignoriert.</small>
+        </label>
+        <label class="field wide">
+          <span>Befehle nach der ersten Anmeldung</span>
+          <textarea id="firstLogonCommands" rows="5" placeholder="powershell -NoProfile -Command &quot;...&quot;"></textarea>
+          <small>Ein Befehl pro Zeile, läuft sichtbar im Fenster des ersten Benutzers.</small>
+        </label>
+        <label class="field wide">
+          <span>PowerShell-Skript im Pass „specialize“</span>
+          <textarea id="specializeScript" rows="5" placeholder="Write-Output 'Hallo'"></textarea>
+          <small>Mehrzeilig erlaubt. Wird als base64 an <code>-EncodedCommand</code> übergeben, es sind keine zusätzlichen Dateien nötig.</small>
+        </label>
+        <label class="field wide">
+          <span>PowerShell-Skript nach der ersten Anmeldung</span>
+          <textarea id="firstLogonScript" rows="5" placeholder="Install-WindowsFeature -Name Web-Server"></textarea>
+          <small>Läuft im Kontext des ersten Benutzers. Für systemweite Aufgaben das specialize-Skript verwenden.</small>
+        </label>
+      </div>
+    </section>
+
+  </form>
+
+  <aside class="column preview">
+    <div class="preview-head">
+      <div>
+        <h2>autounattend.xml</h2>
+        <p class="hint" id="summary">–</p>
+      </div>
+      <div class="actions">
+        <button type="button" id="btnDownload" class="btn primary">Herunterladen</button>
+        <button type="button" id="btnCopy" class="btn">Kopieren</button>
+      </div>
+    </div>
+
+    <div id="warnings" class="warnings" hidden></div>
+
+    <pre id="xmlPreview" class="code" tabindex="0" aria-live="polite"></pre>
+
+    <details class="hint-box">
+      <summary>So wird die Datei verwendet</summary>
+      <ol>
+        <li><strong>autounattend.xml</strong> herunterladen.</li>
+        <li>Datei in das <strong>Wurzelverzeichnis</strong> des Windows-Installationsmediums (USB-Stick oder ISO) kopieren.</li>
+        <li>Rechner vom Medium starten – Windows liest die Datei automatisch und installiert ohne Nachfragen.</li>
+        <li>Alternativ: bei einer vorhandenen Installation die Datei als <strong>unattend.xml</strong> nach <code>C:\Windows\Panther\</code> legen (nur für sysprep bzw. Offline-Images gedacht).</li>
+      </ol>
+      <p>Kennwörter stehen im Klartext in der Datei. Nach der Installation Datei und Datenträger sicher aufbewahren oder löschen.</p>
+    </details>
+  </aside>
+
+</main>
+
+<footer>
+  <span>Läuft vollständig im Browser – keine Server, keine Bibliotheken, keine Datenübertragung.</span>
+</footer>
+
+<noscript>
+  <p class="noscript">Für diesen Generator wird JavaScript benötigt.</p>
+</noscript>
+
+<script src="data.js"></script>
+<script src="generator.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
