@@ -165,6 +165,12 @@ Jede Datei beginnt mit einem Kopfkommentar, der ihren Aufbau beschreibt. Kurzfas
 
 Alle Dateien müssen weiterhin ohne Build und ohne Abhängigkeiten auskommen: klassische `<script>`-Tags, `var` und Funktionen statt Module, keine externen Bibliotheken. Die Prüfungen laufen mit `node tests/run.js`, ohne dass etwas installiert werden muss.
 
+## Veröffentlichen (Freebuff Sites)
+
+`npm run build` (oder `node tools/build-site.js`) legt `freebuff-sites-build/` an: nur `index.html`, `styles.css`, `app.js`, `generator.js`, `data.js` und ein winziger Worker, der sie über `env.ASSETS.fetch` ausliefert. Tests, Screenshots und das Werkzeug selbst bleiben außen vor. `deploy.json` verweist auf dieses Verzeichnis.
+
+Für die lokale Nutzung ändert das nichts: `index.html` läuft weiterhin per Doppelklick ohne Build und ohne Abhängigkeiten. Das Paket ist nur für das Hosting gedacht.
+
 ## Projektdateien
 
 | Datei | Inhalt |

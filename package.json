@@ -1,0 +1,10 @@
+{
+  "name": "unattend-generator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lokaler Generator für autounattend.xml (Windows 10/11, Server 2016–2025) – die Seite selbst läuft ohne Build und ohne Abhängigkeiten.",
+  "scripts": {
+    "build": "node tools/build-site.js",
+    "test": "node tests/run.js"
+  }
+}
