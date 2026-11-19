@@ -1,7 +1,10 @@
 # Veröffentlicht die Seite über GitHub Pages.
-# Voraussetzung: Repository öffentlich und unter Settings → Pages die Quelle
-# "GitHub Actions" gewählt. Gebaut wird mit demselben Skript wie für Freebuff
-# Sites; veröffentlicht werden nur die Laufzeitdateien, nicht Tests oder Werkzeuge.
+# Voraussetzung: Repository öffentlich. Die Pages-Quelle „GitHub Actions“ wird
+# vom Workflow selbst aktiviert, sofern das Secret PAGES_TOKEN gesetzt ist (PAT
+# mit „Pages: write“ und „Administration: write“, klassisch genügt `repo`).
+# Ohne dieses Secret muss Pages bereits unter Settings → Pages aktiviert sein.
+# Gebaut wird mit demselben Skript wie für Freebuff Sites; veröffentlicht werden
+# nur die Laufzeitdateien, nicht Tests oder Werkzeuge.
 name: Seite veröffentlichen
 
 on:
@@ -35,6 +38,19 @@ jobs:
 
       - name: Paket für die Veröffentlichung bauen
         run: node tools/build-site.js
+
+      # GITHUB_TOKEN darf Pages nicht anlegen, deshalb der Umweg über ein PAT.
+      # Ohne Secret bleibt der Schritt wirkungslos statt rot zu werden.
+      - name: Pages-Quelle aktivieren
+        env:
+          GH_TOKEN: ${{ secrets.PAGES_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::PAGES_TOKEN fehlt – Pages muss bereits unter Settings → Pages aktiviert sein."
+            exit 0
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow \
+            || gh api --method PUT "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow
 
       - name: Pages konfigurieren
         uses: actions/configure-pages@v5

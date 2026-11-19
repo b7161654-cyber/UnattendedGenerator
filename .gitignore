@@ -1,3 +1,6 @@
 # Screenshots, Prüfläufe und Zwischenergebnisse aus dem Workspace
 artifacts/
 /freebuff-sites-build/
+
+# npm legt sie beim Ausführen von build/test an; das Projekt hat keine Abhängigkeiten
+package-lock.json
