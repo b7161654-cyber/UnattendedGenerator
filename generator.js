@@ -103,7 +103,6 @@
     bypassSecureBoot: true,
     bypassRam: true,
     bypassCpu: true,
-    bypassMsAccount: true,
     disableConsumerFeatures: true,
     disableCopilot: false,
     removeBloatware: false,
@@ -800,9 +799,9 @@
       commands.push(regAdd(key, name, type, value));
     }
 
-    if (cfg.bypassMsAccount && !isServer(cfg)) {
-      reg('HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\OOBE', 'BypassNRO', 'REG_DWORD', 1);
-    }
+    /* BypassNRO wird bewusst nicht mehr geschrieben: Der Wert wird seit
+       Windows 11 24H2 nicht mehr zuverlässig ausgewertet. Das lokale Konto aus
+       der Antwortdatei plus HideOnlineAccountScreens ist der dokumentierte Weg. */
     if (cfg.disableTelemetry) {
       reg('HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection', 'AllowTelemetry', 'REG_DWORD', 0);
       reg('HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\DataCollection', 'AllowTelemetry', 'REG_DWORD', 0);
@@ -1026,7 +1025,7 @@
 
   function hasClientOnlyOptions(cfg) {
     return cfg.bypassTpm || cfg.bypassSecureBoot || cfg.bypassRam || cfg.bypassCpu ||
-      cfg.bypassMsAccount || cfg.disableConsumerFeatures || cfg.disableCopilot ||
+      cfg.disableConsumerFeatures || cfg.disableCopilot ||
       cfg.removeBloatware || cfg.uninstallOneDrive || cfg.hideEulaPage ||
       cfg.hideOnlineAccountScreens || cfg.hideWirelessSetup || cfg.showFileExtensions ||
       cfg.darkMode || cfg.disableWidgets || cfg.disableSmartScreen || cfg.hideEdgeFre ||
@@ -1142,6 +1141,10 @@
     if (!isServer(cfg) && !cfg.userName && !cfg.administratorPassword) {
       warnings.push('Weder lokales Konto noch Administratorkennwort gesetzt – Windows fragt die Zugangsdaten im OOBE ab.');
     }
+    if (!isServer(cfg) && !cfg.hideOnlineAccountScreens) {
+      warnings.push('Ohne „Microsoft-Konto-Anmeldung überspringen“ kann das OOBE eine Online-Anmeldung verlangen. ' +
+        'Der frühere Registry-Wert BypassNRO greift seit Windows 11 24H2 nicht mehr zuverlässig – der belastbare Weg ist das lokale Konto aus der Antwortdatei.');
+    }
     if (cfg.editionMode === 'name' && /^\d+$/.test(cfg.editionValue)) {
       warnings.push('Edition wird über den Namen gewählt, der Wert ist aber eine Zahl. Bitte den Image-Namen eintragen (z. B. "Windows 11 Pro").');
     }
@@ -1216,7 +1219,6 @@
       if (cfg.disableConsumerFeatures) pointless.push('Werbeinhalte');
       if (cfg.disableAppSuggestions) pointless.push('App-Vorschläge');
       if (cfg.uninstallOneDrive) pointless.push('OneDrive');
-      if (cfg.bypassMsAccount) pointless.push('Microsoft-Konto-Bypass');
       if (pointless.length) {
         warnings.push('LTSC bringt weder Store-Apps noch Consumer-Features (' + pointless.join(', ') + ') – diese Optionen laufen ins Leere.');
       }

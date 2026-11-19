@@ -269,10 +269,24 @@ test('Windows-11-Bypässe landen im windowsPE-Pass', function () {
     'Bypass muss im windowsPE-Pass stehen');
 });
 
-test('BypassNRO landet im specialize-Pass', function () {
-  var xml = build({ bypassMsAccount: true });
-  has(xml, 'BypassNRO');
-  assert.ok(xml.indexOf('BypassNRO') > xml.indexOf('pass="specialize"'));
+test('BypassNRO wird nicht mehr in die Datei geschrieben', function () {
+  hasNot(build({}), 'BypassNRO');
+  hasNot(build({ hideOnlineAccountScreens: true }), 'BypassNRO');
+  has(build({}), '<HideOnlineAccountScreens>true</HideOnlineAccountScreens>');
+});
+
+test('Fehlende Konto-Anmelde-Umgehung wird gewarnt', function () {
+  warns(warningText({ hideOnlineAccountScreens: false }), 'BypassNRO greift seit Windows 11 24H2');
+  doesNotWarn(warningText({ hideOnlineAccountScreens: true }), 'BypassNRO greift');
+  doesNotWarn(warningText({ target: 'server', hideOnlineAccountScreens: false }), 'BypassNRO greift');
+});
+
+test('BypassNRO-Option ist aus Vorgaben und Vorlagen entfernt', function () {
+  assert.ok(!('bypassMsAccount' in G.defaults()), 'DEFAULTS enthält noch bypassMsAccount');
+  D.presets.forEach(function (preset) {
+    assert.ok(!Object.prototype.hasOwnProperty.call(preset.config, 'bypassMsAccount'),
+      'Vorlage ' + preset.id + ' enthält noch bypassMsAccount');
+  });
 });
 
 test('System-Tweaks erzeugen passende Registry-Befehle', function () {
@@ -390,7 +404,7 @@ test('Server: Client-Optionen entfallen, eigene Befehle bleiben', function () {
   var xml = build({
     target: 'server',
     bypassTpm: true, bypassSecureBoot: true, bypassRam: true, bypassCpu: true,
-    bypassMsAccount: true, disableConsumerFeatures: true, disableCopilot: true,
+    disableConsumerFeatures: true, disableCopilot: true,
     removeBloatware: true, uninstallOneDrive: true,
     hideEulaPage: true, hideOnlineAccountScreens: true, hideWirelessSetup: true,
     showFileExtensions: true, darkMode: true, disableWidgets: true,
@@ -424,7 +438,7 @@ test('Server: Warnungen für Architektur, Kennwort, Indizes und Core', function 
     target: 'server', administratorPassword: 'X1', editionMode: 'name',
     editionValue: 'Windows Server 2022 Standard', architecture: 'amd64', userName: 'Administrator',
     bypassTpm: false, bypassSecureBoot: false, bypassRam: false, bypassCpu: false,
-    bypassMsAccount: false, disableConsumerFeatures: false, disableCopilot: false,
+    disableConsumerFeatures: false, disableCopilot: false,
     removeBloatware: false, uninstallOneDrive: false, hideEulaPage: false,
     hideOnlineAccountScreens: false, hideWirelessSetup: false, showFileExtensions: false,
     darkMode: false, disableWidgets: false
@@ -630,11 +644,11 @@ test('LTSC meldet wirkungslose Client-Optionen', function () {
   var base = { target: 'windows10', editionMode: 'name', editionValue: 'Windows 10 IoT Enterprise LTSC 2021' };
   warns(warningText(Object.assign({}, base, {
     removeBloatware: true, uninstallOneDrive: true,
-    disableConsumerFeatures: false, disableAppSuggestions: false, bypassMsAccount: false
+    disableConsumerFeatures: false, disableAppSuggestions: false
   })), 'LTSC bringt weder Store-Apps noch Consumer-Features (Apps entfernen, OneDrive)');
   doesNotWarn(warningText(Object.assign({}, base, {
     removeBloatware: false, uninstallOneDrive: false, disableConsumerFeatures: false,
-    disableAppSuggestions: false, bypassMsAccount: false
+    disableAppSuggestions: false
   })), 'LTSC bringt weder Store-Apps');
   doesNotWarn(warningText({ target: 'windows10', editionMode: 'index', editionValue: '1' }), 'LTSC');
 });

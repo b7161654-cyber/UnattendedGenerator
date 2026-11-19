@@ -211,7 +211,6 @@ var UnattendData = (function () {
         bypassSecureBoot: true,
         bypassRam: true,
         bypassCpu: true,
-        bypassMsAccount: true,
         disableConsumerFeatures: true,
         removeBloatware: true,
         showFileExtensions: true
@@ -235,7 +234,6 @@ var UnattendData = (function () {
         bypassSecureBoot: false,
         bypassRam: false,
         bypassCpu: false,
-        bypassMsAccount: false,
         disableConsumerFeatures: false,
         removeBloatware: false,
         showFileExtensions: false
@@ -282,7 +280,6 @@ var UnattendData = (function () {
         bypassSecureBoot: true,
         bypassRam: true,
         bypassCpu: true,
-        bypassMsAccount: true,
         disableConsumerFeatures: true,
         removeBloatware: true,
         showFileExtensions: true
@@ -316,7 +313,6 @@ var UnattendData = (function () {
         bypassSecureBoot: false,
         bypassRam: false,
         bypassCpu: false,
-        bypassMsAccount: false,
         disableConsumerFeatures: false,
         removeBloatware: false,
         showFileExtensions: false
@@ -351,7 +347,6 @@ var UnattendData = (function () {
         bypassSecureBoot: false,
         bypassRam: false,
         bypassCpu: false,
-        bypassMsAccount: false,
         disableConsumerFeatures: false,
         removeBloatware: false,
         uninstallOneDrive: false,
@@ -389,7 +384,6 @@ var UnattendData = (function () {
         bypassSecureBoot: false,
         bypassRam: false,
         bypassCpu: false,
-        bypassMsAccount: false,
         disableConsumerFeatures: false,
         removeBloatware: false,
         uninstallOneDrive: false,
@@ -406,7 +400,6 @@ var UnattendData = (function () {
         bypassSecureBoot: true,
         bypassRam: true,
         bypassCpu: true,
-        bypassMsAccount: true,
         disableConsumerFeatures: true,
         disableAppSuggestions: true,
         removeBloatware: true,
@@ -421,7 +414,6 @@ var UnattendData = (function () {
       id: 'quick-privacy',
       name: 'Windows 11 – Datenschutz, gehärtet',
       config: withBase({
-        bypassMsAccount: true,
         disableConsumerFeatures: true,
         disableAppSuggestions: true,
         removeBloatware: true,
@@ -440,7 +432,6 @@ var UnattendData = (function () {
         bypassSecureBoot: true,
         bypassRam: true,
         bypassCpu: true,
-        bypassMsAccount: true,
         disableConsumerFeatures: true,
         removeBloatware: true,
         disableGameDvr: true,

@@ -12,7 +12,7 @@ Erzeugt eine `autounattend.xml` für die unbeaufsichtigte Installation von Windo
 - Zusätzliche Treiberordner: Setup übernimmt entpackte Treiber vom Medium ins installierte Windows (Details unter „Treiber vom Installationsmedium“)
 - Lokale Konten, Administratorkennwort, automatische Anmeldung, OOBE-Seiten ausblenden
 - Produktschlüssel: eigener Schlüssel, Auswahl aus den offiziellen KMS-Clientschlüsseln (GVLK, Details unter „Volumenlizenz-Schlüssel (KMS)“) oder Schlüssel aus BIOS/UEFI (OEM), bei dem bewusst kein Schlüssel in der Datei steht
-- Windows-11-Bypässe (TPM, Secure Boot, RAM, CPU, Microsoft-Konto)
+- Windows-11-Bypässe (TPM, Secure Boot, RAM, CPU)
 - Registry-Eingriffe zu Telemetrie, Cortana, Websuche, Copilot, RDP, UAC, Schnellstart, OneDrive und vorinstallierten Apps
 - Weitere Optimierungen: SmartScreen, Smart App Control, Game DVR, lange Pfade, Update-Neustart, BitLocker-Geräteverschlüsselung, Edge (Erstlauf, Startup-Boost, Desktop-Verknüpfung), Taskleiste, App-Vorschläge, Systemwiederherstellung, klassisches Kontextmenü
 - Kontorichtlinien: Kennwortablauf und Kontosperrung über `net accounts`
@@ -60,6 +60,16 @@ Die Kennwörter stehen im Klartext in der Datei (`<PlainText>true</PlainText>`) 
 - Windows legt während des Setups eine Kopie der Antwortdatei unter `C:\Windows\Panther\` ab. Die Kennwörter bleiben also auch auf dem installierten System lesbar und sollten nach der Einrichtung geändert werden.
 - Wer das vermeiden will: Kennwortfelder leer lassen, ohne automatische Anmeldung arbeiten und die Zugangsdaten erst im OOBE bzw. anschließend setzen.
 
+## Microsoft-Konto im OOBE umgehen
+
+Der Generator legt im Konto-Bereich ein lokales Konto an und setzt `HideOnlineAccountScreens` im `oobeSystem`-Pass. Das ist der dokumentierte Weg: Setup legt das Konto aus der Antwortdatei an und überspringt die Seiten für Microsoft-Konto und Netzwerk.
+
+Der frühere Registry-Wert `BypassNRO` wird bewusst nicht mehr geschrieben. Microsoft hat `oobe\bypassnro` mit Windows 11 24H2 entfernt, der Wert wird seither nicht mehr zuverlässig ausgewertet, und auch `start ms-cxh:localonly` ist in neueren Builds gesperrt. Eine Option, die auf aktuellen Images nichts bewirkt, gehört nicht in die Datei.
+
+- Voraussetzung ist ein Benutzername im Konto-Bereich; ohne ihn fragt Setup die Zugangsdaten selbst ab.
+- Ist „Microsoft-Konto-Anmeldung überspringen“ abgeschaltet, warnt der Generator: Das OOBE kann dann trotz lokalem Konto eine Online-Anmeldung verlangen.
+- Auf Windows 10 und älteren Windows-11-Builds funktioniert derselbe Weg; ein zusätzlicher Registry-Eintrag ist dort nicht nötig, weil das lokale Konto ohnehin aus der Datei kommt.
+
 ## Vor dem Einsatz prüfen
 
 Die erzeugte Datei vor jedem produktiven Einsatz mit dem **Windows System Image Manager (WSIM)** aus dem Windows ADK öffnen und validieren:
@@ -90,7 +100,7 @@ Die Auswahl im Formular setzt nur einen Vorschlag – der Image-Name bleibt edit
 Was der Generator editionsabhängig prüft:
 
 - **Windows 11 IoT Enterprise LTSC** hat TPM 2.0 und Secure Boot optional. Die Warnung „TPM 2.0, Secure Boot und UEFI müssen vorhanden sein“ und die GPT-Pflicht entfallen daher, und gesetzte Hardware-Bypässe werden als unnötig gemeldet. Für **Windows 11 Enterprise LTSC 2024** gelten weiterhin die vollen Windows-11-Anforderungen.
-- **LTSC allgemein** bringt weder Store-Apps noch Consumer-Features. Optionen wie Apps entfernen, Werbeinhalte, App-Vorschläge, OneDrive oder Microsoft-Konto-Bypass laufen dort ins Leere und werden als solche gemeldet. Außerdem wird von der Index-Auswahl abgeraten, weil die LTSC-Medien mehrere Images enthalten und der Index leicht die falsche Edition trifft.
+- **LTSC allgemein** bringt weder Store-Apps noch Consumer-Features. Optionen wie Apps entfernen, Werbeinhalte, App-Vorschläge oder OneDrive laufen dort ins Leere und werden als solche gemeldet. Außerdem wird von der Index-Auswahl abgeraten, weil die LTSC-Medien mehrere Images enthalten und der Index leicht die falsche Edition trifft.
 - **Azure Edition** außerhalb der Zielversion „Windows Server“ sowie vertauschte Client-/Server-Image-Namen werden gemeldet, ebenso ein Windows-11-Image bei Zielversion Windows 10 (und umgekehrt).
 
 ## Volumenlizenz-Schlüssel (KMS)
@@ -156,4 +166,4 @@ Bewusst nicht enthalten sind der Umbau zu einer bootfähigen ISO und der Import 
 
 Kennwortablauf und Kontosperrung werden per `net accounts` gesetzt. Ist der Rechner Mitglied einer Domäne, hat deren Gruppenrichtlinie Vorrang – der Wert gilt dann nicht mehr.
 
-Windows-Server-Rollen (AD DS, DNS, DHCP, Hyper-V, IIS) lassen sich nicht über eine Antwortdatei installieren; der Generator deckt die Installation und Erstkonfiguration ab, nicht die Rolleneinrichtung. Client-Optionen wie Hardware-Bypass, Microsoft-Konto-Umgehung, Werbeinhalte, App-Entfernung und Desktop-Anpassungen werden für Server bewusst nicht in die Datei geschrieben, weil sie dort wirkungslos sind.
+Windows-Server-Rollen (AD DS, DNS, DHCP, Hyper-V, IIS) lassen sich nicht über eine Antwortdatei installieren; der Generator deckt die Installation und Erstkonfiguration ab, nicht die Rolleneinrichtung. Client-Optionen wie Hardware-Bypass, Werbeinhalte, App-Entfernung und Desktop-Anpassungen werden für Server bewusst nicht in die Datei geschrieben, weil sie dort wirkungslos sind.

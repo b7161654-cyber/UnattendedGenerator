@@ -44,7 +44,7 @@
   var BOOL_FIELDS = [
     'acceptEula', 'enableFirewall', 'disableDynamicUpdate', 'wipeDisk',
     'autoLogon', 'hideEulaPage', 'hideOnlineAccountScreens', 'hideWirelessSetup',
-    'bypassTpm', 'bypassSecureBoot', 'bypassRam', 'bypassCpu', 'bypassMsAccount',
+    'bypassTpm', 'bypassSecureBoot', 'bypassRam', 'bypassCpu',
     'disableConsumerFeatures', 'disableCopilot', 'removeBloatware', 'uninstallOneDrive',
     'disableTelemetry', 'disableCortana', 'disableWebSearch', 'enableRdp',
     'disableFastStartup', 'disableUac', 'numLockOn',
