@@ -9,6 +9,7 @@ Erzeugt eine `autounattend.xml` für die unbeaufsichtigte Installation von Windo
 - Eigene Vorlagen für Windows 10 Enterprise/IoT Enterprise LTSC 2019 und 2021 sowie Windows 11 Enterprise/IoT Enterprise LTSC 2024, inklusive der passenden Image-Namen und editionsabhängiger Prüfungen (Details unter „LTSC, IoT Enterprise und Azure Edition“)
 - Sprache, Zeitzone und bis zu drei Tastaturlayouts (das erste ist das Standardlayout) für Setup und installiertes System
 - Datenträger: GPT/UEFI oder MBR/BIOS neu anlegen, auf vorhandene Partition oder auf die erste freie Partition installieren
+- Zusätzliche Treiberordner: Setup übernimmt entpackte Treiber vom Medium ins installierte Windows (Details unter „Treiber vom Installationsmedium“)
 - Lokale Konten, Administratorkennwort, automatische Anmeldung, OOBE-Seiten ausblenden
 - Produktschlüssel: eigener Schlüssel, Auswahl aus den offiziellen KMS-Clientschlüsseln (GVLK, Details unter „Volumenlizenz-Schlüssel (KMS)“) oder Schlüssel aus BIOS/UEFI (OEM), bei dem bewusst kein Schlüssel in der Datei steht
 - Windows-11-Bypässe (TPM, Secure Boot, RAM, CPU, Microsoft-Konto)
@@ -35,6 +36,17 @@ Die Seite verwendet bewusst klassische `<script>`-Tags statt ES-Modulen, damit s
 4. Rechner vom Medium starten. Windows Setup liest die Datei automatisch und arbeitet die Pässe `windowsPE`, `specialize` und `oobeSystem` ab.
 
 Wird die Datei nicht gefunden, ist sie meist eine Ebene zu tief abgelegt oder das Medium wurde nach dem Kopieren neu erstellt, ohne die Datei zu übernehmen. Der Dateiname muss exakt `autounattend.xml` lauten.
+
+## Treiber vom Installationsmedium
+
+Unter „Treiberordner“ lassen sich ein oder mehrere Pfade eintragen, ein Pfad pro Zeile (Zeilen mit `#` werden ignoriert). Der Generator schreibt sie als `Microsoft-Windows-PnpCustomizationsNonWinPE` in den Pass **`offlineServicing`**: Setup kopiert die Treiber während der Installation in den Treiberstore des installierten Windows.
+
+Bewusst nicht `specialize`: Laut Microsoft-Dokumentation ist `PnpCustomizationsNonWinPE` nur in `offlineServicing` und `auditSystem` zulässig; im `specialize`-Pass würde die Komponente von WSIM als ungültig gemeldet und vom Setup ignoriert.
+
+- Der Ordner braucht **entpackte** Treiber mit `.inf`-Dateien, keine ZIP- oder EXE-Archive.
+- Der Laufwerksbuchstabe des Mediums kann beim Setup abweichen (meist `D:` oder `E:`). Wer unsicher ist, kopiert den Ordner vorher per `specialize`-Befehl auf das Zielsystem und trägt `C:\Drivers` ein.
+- Für Treiber, die **Setup selbst** braucht (Speichercontroller, USB, Netzwerk in der Setup-Umgebung), ist der Pass `windowsPE` mit `Microsoft-Windows-PnpCustomizationsWinPE` zuständig – den deckt dieser Generator bewusst nicht ab.
+- UNC-Pfade sind zulässig, funktionieren aber nur, wenn im `offlineServicing`-Pass schon eine Verbindung besteht. Zugangsdaten schreibt der Generator nicht in die Datei.
 
 ## Klartext-Kennwörter
 

@@ -221,6 +221,11 @@
           <input type="checkbox" id="disableDynamicUpdate" checked>
           <span>Setup-Updates aus dem Internet überspringen</span>
         </label>
+        <label class="field wide">
+          <span>Treiberordner (optional, ein Pfad pro Zeile)</span>
+          <textarea id="driverPaths" rows="3" placeholder="D:\Drivers"></textarea>
+          <small>Entpackte Treiber (.inf) auf dem Medium oder Zielsystem. Wird als <code>PnpCustomizationsNonWinPE</code> im <code>offlineServicing</code>-Pass übergeben; der Laufwerksbuchstabe des Mediums kann abweichen.</small>
+        </label>
       </div>
     </section>
 

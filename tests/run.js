@@ -922,6 +922,28 @@ test('Game DVR wird über beide HKCU-Werte abgeschaltet', function () {
   hasNot(build({ disableGameDvr: false }), 'GameDVR_Enabled');
 });
 
+test('Treiberordner landen im offlineServicing-Pass', function () {
+  var xml = build({ driverPaths: 'D:\\Drivers\n# Kommentar\nE:\\Treiber\\Netz' });
+
+  has(xml, 'Microsoft-Windows-PnpCustomizationsNonWinPE');
+  has(xml, '<Path>D:\\Drivers</Path>');
+  has(xml, '<Path>E:\\Treiber\\Netz</Path>');
+  has(xml, '<PathAndCredentials wcm:action="add" wcm:keyValue="1">');
+  has(xml, '<PathAndCredentials wcm:action="add" wcm:keyValue="2">');
+  assertWellFormed(xml);
+
+  /* Die Komponente gehört in offlineServicing, nicht in specialize. */
+  var offline = xml.slice(xml.indexOf('pass="offlineServicing"'), xml.indexOf('pass="specialize"'));
+  assert.ok(offline.indexOf('PnpCustomizationsNonWinPE') !== -1, 'Treiber nicht im offlineServicing-Pass');
+  assert.strictEqual((xml.match(/PnpCustomizationsNonWinPE/g) || []).length, 1);
+});
+
+test('Ohne Treiberpfade entsteht kein offlineServicing-Pass', function () {
+  hasNot(build({ driverPaths: '' }), 'offlineServicing');
+  hasNot(build({ driverPaths: '   \n# nur ein Kommentar\n' }), 'offlineServicing');
+  hasNot(build({}), 'PnpCustomizationsNonWinPE');
+});
+
 test('Computernamen: Zufall nur als einzelnes *, keine reinen Ziffern', function () {
   var star = warningText({ computerName: '*' });
   doesNotWarn(star, 'Zufallsnamen');

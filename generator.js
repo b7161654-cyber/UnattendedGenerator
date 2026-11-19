@@ -70,6 +70,7 @@
     editionValue: '1',
     productKey: '',
     oemProductKey: false,
+    driverPaths: '',
     computerName: '',
     owner: '',
     organization: '',
@@ -402,6 +403,7 @@
     cfg.owner = str(cfg.owner);
     cfg.organization = str(cfg.organization);
     cfg.productKey = str(cfg.productKey);
+    cfg.driverPaths = String(cfg.driverPaths === undefined ? '' : cfg.driverPaths);
     cfg.specializeCommands = String(cfg.specializeCommands === undefined ? '' : cfg.specializeCommands);
     cfg.firstLogonCommands = String(cfg.firstLogonCommands === undefined ? '' : cfg.firstLogonCommands);
     cfg.administratorPassword = String(cfg.administratorPassword === undefined ? '' : cfg.administratorPassword);
@@ -955,6 +957,25 @@
    * Zusammenbau
    * ------------------------------------------------------------------ */
 
+  /* Zusätzliche Treiberordner für das installierte Windows. Die Komponente
+     PnpCustomizationsNonWinPE ist laut Microsoft-Dokumentation für den
+     offlineServicing- und den auditSystem-Pass vorgesehen (nicht für
+     specialize): Setup kopiert die Treiber während der Installation in den
+     Treiberstore des Offline-Images. Bootkritische Treiber, die schon Setup
+     selbst braucht, gehören dagegen in den windowsPE-Pass. */
+  function pnpCustomizations(cfg) {
+    var paths = lines(cfg.driverPaths);
+    if (!paths.length) return null;
+
+    return component('Microsoft-Windows-PnpCustomizationsNonWinPE', cfg.architecture, [
+      n('DriverPaths', null, paths.map(function (path, index) {
+        return n('PathAndCredentials', { 'wcm:action': 'add', 'wcm:keyValue': index + 1 }, [
+          v('Path', path)
+        ]);
+      }))
+    ]);
+  }
+
   /* Baut die vollständige Datei. Die Reihenfolge der Pässe ist fest:
      windowsPE (Setup-Umgebung), specialize (System nach dem Neustart),
      oobeSystem (erste Anmeldung). Neue Komponenten gehören in den Pass,
@@ -981,7 +1002,15 @@
       internationalCore('Microsoft-Windows-International-Core', cfg, false)
     ]);
 
-    var root = n('unattend', { xmlns: 'urn:schemas-microsoft-com:unattend' }, [windowsPe, specialize, oobe]);
+    var pnp = pnpCustomizations(cfg);
+    var offlineServicing = pnp ? n('settings', { pass: 'offlineServicing' }, [pnp]) : null;
+
+    var root = n('unattend', { xmlns: 'urn:schemas-microsoft-com:unattend' }, compact([
+      windowsPe,
+      offlineServicing,
+      specialize,
+      oobe
+    ]));
 
     return [
       '<?xml version="1.0" encoding="utf-8"?>',

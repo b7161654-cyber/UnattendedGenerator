@@ -33,7 +33,7 @@
     'serverVersion', 'serverEdition', 'serverInstallType',
     'computerName', 'owner', 'organization',
     'uiLanguage', 'systemLocale', 'userLocale', 'inputLocale', 'inputLocale2', 'inputLocale3', 'timezone',
-    'diskMode', 'diskId', 'partitionId',
+    'diskMode', 'diskId', 'partitionId', 'driverPaths',
     'userName', 'userDisplayName', 'userPassword', 'userGroup',
     'administratorPassword', 'autoLogonCount', 'protectYourPC',
     'nicName', 'ip', 'subnet', 'gateway', 'dns1', 'dns2',
