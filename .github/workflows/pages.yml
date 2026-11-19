@@ -1,0 +1,56 @@
+# Veröffentlicht die Seite über GitHub Pages.
+# Voraussetzung: Repository öffentlich und unter Settings → Pages die Quelle
+# "GitHub Actions" gewählt. Gebaut wird mit demselben Skript wie für Freebuff
+# Sites; veröffentlicht werden nur die Laufzeitdateien, nicht Tests oder Werkzeuge.
+name: Seite veröffentlichen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Node einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Prüfungen ausführen
+        run: node tests/run.js
+
+      - name: Paket für die Veröffentlichung bauen
+        run: node tools/build-site.js
+
+      - name: Pages konfigurieren
+        uses: actions/configure-pages@v5
+
+      - name: Paket hochladen
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: freebuff-sites-build/assets
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Veröffentlichen
+        id: deployment
+        uses: actions/deploy-pages@v4
