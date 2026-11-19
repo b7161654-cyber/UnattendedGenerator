@@ -351,6 +351,97 @@ test('Domänenbeitritt bleibt optional: Standard und Vorlagen in der Arbeitsgrup
   });
 });
 
+/* ------------------------------------------------------------ Fehlerampel */
+
+test('Meldungen tragen Schweregrade, Fehler nur bei echten Abbrüchen', function () {
+  var clean = G.issues({ target: 'windows10', diskMode: 'gpt', productKey: 'X', userName: 'u', userPassword: 'p' });
+  clean.forEach(function (item) {
+    assert.ok(['error', 'warn', 'hint'].indexOf(item.level) !== -1, 'unbekannter Schweregrad: ' + item.level);
+    assert.strictEqual(typeof item.text, 'string');
+  });
+  assert.deepStrictEqual(clean.filter(function (item) { return item.level === 'error'; }), [],
+    'saubere Konfiguration darf keinen Fehler melden');
+
+  var broken = G.issues({ target: 'windows11', domainJoin: true, domainName: 'firma', domainUser: '', domainPassword: '' });
+  var errors = broken.filter(function (item) { return item.level === 'error'; }).map(function (item) { return item.text; }).join('\n');
+  warns(errors, 'kein gültiger Domänenname');
+  warns(errors, 'fehlen Domänenkonto oder Kennwort');
+
+  /* analyze() bleibt die reine Textliste für Doku und bestehende Prüfungen. */
+  assert.strictEqual(typeof G.analyze({})[0], 'string');
+  assert.strictEqual(G.analyze({}).length, G.issues({}).length);
+});
+
+test('AcceptEula folgt dem Häkchen', function () {
+  has(build({ acceptEula: true }), '<AcceptEula>true</AcceptEula>');
+  has(build({ acceptEula: false }), '<AcceptEula>false</AcceptEula>');
+  warns(warningText({ acceptEula: false }), 'Lizenzseite');
+});
+
+/* ------------------------------------------------------------ Verträge */
+
+var fs = require('fs');
+var path = require('path');
+var projectRoot = path.join(__dirname, '..');
+var appSource = fs.readFileSync(path.join(projectRoot, 'app.js'), 'utf8');
+var htmlSource = fs.readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
+var generatorSource = fs.readFileSync(path.join(projectRoot, 'generator.js'), 'utf8');
+
+function fieldIds(name) {
+  var start = appSource.indexOf('var ' + name + ' = [');
+  assert.notStrictEqual(start, -1, name + ' fehlt in app.js');
+  var end = appSource.indexOf('];', start);
+  return (appSource.slice(start, end).match(/'([^']+)'/g) || []).map(function (token) { return token.slice(1, -1); });
+}
+
+test('Jede Feld-id aus app.js steht in index.html', function () {
+  var ids = fieldIds('TEXT_FIELDS').concat(fieldIds('BOOL_FIELDS'));
+  assert.ok(ids.length > 90, 'zu wenige Felder gefunden: ' + ids.length);
+  ids.forEach(function (id) {
+    assert.ok(htmlSource.indexOf('id="' + id + '"') !== -1, 'index.html hat kein Element mit id="' + id + '"');
+  });
+});
+
+test('BOOL_FIELDS verweisen auf Checkboxen', function () {
+  fieldIds('BOOL_FIELDS').forEach(function (id) {
+    var at = htmlSource.indexOf('id="' + id + '"');
+    var tag = htmlSource.slice(htmlSource.lastIndexOf('<', at), htmlSource.indexOf('>', at) + 1);
+    assert.ok(/type="checkbox"/.test(tag), id + ' ist keine Checkbox');
+  });
+});
+
+test('Jeder DEFAULTS-Schlüssel wird im Generator gelesen', function () {
+  var start = generatorSource.indexOf('var DEFAULTS = {');
+  var end = generatorSource.indexOf('\n  };', start);
+  assert.ok(start !== -1 && end > start, 'DEFAULTS nicht gefunden');
+  var keys = (generatorSource.slice(start, end).match(/^ {4}([A-Za-z]\w*):/gm) || []).map(function (line) {
+    return line.trim().replace(/:$/, '');
+  });
+  assert.ok(keys.length > 90, 'zu wenige DEFAULTS-Schlüssel: ' + keys.length);
+  var rest = generatorSource.slice(0, start) + generatorSource.slice(end);
+  keys.forEach(function (key) {
+    var used = new RegExp('cfg\\.' + key + '\\b').test(rest) || rest.indexOf("'" + key + "'") !== -1;
+    assert.ok(used, 'DEFAULTS-Schlüssel „' + key + '“ wird nirgends gelesen');
+  });
+});
+
+test('Vorlagen setzen nur bekannte Schlüssel und vorhandene Profile', function () {
+  var known = G.defaults();
+  assert.strictEqual(known.disableGameDvr, false, 'disableGameDvr fehlt in DEFAULTS');
+  D.presets.forEach(function (preset) {
+    Object.keys(preset.config).forEach(function (key) {
+      assert.ok(Object.prototype.hasOwnProperty.call(known, key),
+        'Vorlage ' + preset.id + ' setzt unbekannten Schlüssel ' + key);
+    });
+    assert.strictEqual(G.normalize(preset.config).domainJoin, false,
+      'Vorlage ' + preset.id + ' aktiviert den Domänenbeitritt');
+  });
+  D.quickProfiles.forEach(function (profile) {
+    assert.ok(D.presets.some(function (preset) { return preset.id === profile.preset; }),
+      'Schnellprofil zeigt auf unbekannte Vorlage ' + profile.preset);
+  });
+});
+
 test('System-Tweaks erzeugen passende Registry-Befehle', function () {
   var xml = build({ enableRdp: true, disableTelemetry: true, disableCortana: true, disableFastStartup: true, disableUac: true, numLockOn: true });
   has(xml, 'fDenyTSConnections');

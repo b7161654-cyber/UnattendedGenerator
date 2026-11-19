@@ -123,6 +123,7 @@
     darkMode: false,
     disableWidgets: false,
     disableSac: false,
+    disableGameDvr: false,
     disableSmartScreen: false,
     disableSystemRestore: false,
     enableLongPaths: false,
@@ -581,7 +582,7 @@
   }
 
   function userData(cfg) {
-    var children = [v('AcceptEula', 'true')];
+    var children = [v('AcceptEula', cfg.acceptEula ? 'true' : 'false')];
     if (cfg.owner) children.push(v('FullName', cfg.owner));
     if (cfg.organization) children.push(v('Organization', cfg.organization));
     var key = effectiveProductKey(cfg);
@@ -1141,96 +1142,103 @@
     return /^OU=[^,]+,(?:OU=[^,]+,)*DC=[^,]+(?:,DC=[^,]+)+$/i.test(value.replace(/\s+/g, ''));
   }
 
-  function analyze(input) {
+  function collectIssues(input) {
     var cfg = normalize(input);
-    var warnings = [];
+    var issues = [];
+    /* Jede Meldung trägt einen Schweregrad: 'error' sperrt den Download,
+       'warn' ist ein Risiko, 'hint' erklärt nur. */
+    function add(level, text) { issues.push({ level: level, text: text }); }
+    function warn(text) { add('warn', text); }
     var family = editionFamily(cfg.editionValue);
     var iot = family === 'iot';
     var ltscLike = family === 'ltsc' || iot;
 
     if (cfg.target === 'windows11' && cfg.architecture === 'x86') {
-      warnings.push('Windows 11 gibt es nur für x64 und ARM64. Für x86 bitte Windows 10 oder Server wählen.');
+      add('error', 'Windows 11 gibt es nur für x64 und ARM64. Für x86 bitte Windows 10 oder Server wählen.');
     }
     if (cfg.target === 'windows11' && cfg.diskMode === 'mbr' && !iot) {
-      warnings.push('Windows 11 benötigt UEFI mit GPT. Der MBR-Modus ist nur für Windows 10/Server im BIOS-Modus sinnvoll.');
+      add('error', 'Windows 11 benötigt UEFI mit GPT. Der MBR-Modus ist nur für Windows 10/Server im BIOS-Modus sinnvoll.');
     }
     if (cfg.target === 'windows11' && cfg.diskMode === 'gpt' && !cfg.bypassTpm && !cfg.bypassSecureBoot && !iot) {
-      warnings.push('Windows 11 ohne Hardware-Bypass: TPM 2.0, Secure Boot und UEFI müssen vorhanden sein.');
+      warn('Windows 11 ohne Hardware-Bypass: TPM 2.0, Secure Boot und UEFI müssen vorhanden sein.');
     }
     if (cfg.autoLogon && !cfg.userName) {
-      warnings.push('Automatische Anmeldung ist aktiv, aber kein Benutzername gesetzt – AutoLogon wird weggelassen.');
+      warn('Automatische Anmeldung ist aktiv, aber kein Benutzername gesetzt – AutoLogon wird weggelassen.');
     }
     if (cfg.autoLogon && cfg.userName && !cfg.userPassword) {
-      warnings.push('AutoLogon ohne Kennwort funktioniert nicht zuverlässig. Bitte ein Kennwort für das Konto setzen.');
+      warn('AutoLogon ohne Kennwort funktioniert nicht zuverlässig. Bitte ein Kennwort für das Konto setzen.');
     }
     if (cfg.computerName && cfg.computerName.length > 15) {
-      warnings.push('Der Computername ist länger als 15 Zeichen. Windows kürzt ihn beim Setup.');
+      warn('Der Computername ist länger als 15 Zeichen. Windows kürzt ihn beim Setup.');
     }
     if (cfg.computerName && !/^[A-Za-z0-9*-]+$/.test(cfg.computerName)) {
-      warnings.push('Der Computername enthält ungültige Zeichen. Erlaubt sind Buchstaben, Ziffern, "-" und "*".');
+      warn('Der Computername enthält ungültige Zeichen. Erlaubt sind Buchstaben, Ziffern, "-" und "*".');
     } else if (cfg.computerName === '*') {
       /* Windows vergibt dann selbst einen Namen (DESKTOP-XXXXXXX). */
     } else if (cfg.computerName && cfg.computerName.indexOf('*') !== -1) {
-      warnings.push('Ein „*“ erzeugt nur allein einen Zufallsnamen. „' + cfg.computerName + '“ wird von Setup nicht als Muster verstanden – bitte einen festen Namen eintragen oder das Feld leer lassen.');
+      warn('Ein „*“ erzeugt nur allein einen Zufallsnamen. „' + cfg.computerName + '“ wird von Setup nicht als Muster verstanden – bitte einen festen Namen eintragen oder das Feld leer lassen.');
     } else if (cfg.computerName && /^\d+$/.test(cfg.computerName)) {
-      warnings.push('Der Computername darf nicht nur aus Ziffern bestehen.');
+      warn('Der Computername darf nicht nur aus Ziffern bestehen.');
+    }
+    if (!cfg.acceptEula) {
+      add('hint', 'Ohne automatische Lizenzbestätigung (AcceptEula) bleibt das Setup an der Lizenzseite stehen.');
     }
     if (cfg.staticIp && !cfg.ip) {
-      warnings.push('Statische IP ist aktiv, aber keine IP-Adresse angegeben – die Netzwerkkonfiguration wird weggelassen.');
+      warn('Statische IP ist aktiv, aber keine IP-Adresse angegeben – die Netzwerkkonfiguration wird weggelassen.');
     }
     if (cfg.staticIp && cfg.ip && !cfg.gateway) {
-      warnings.push('Statische IP ohne Gateway: Der Rechner erreicht nur das lokale Subnetz.');
+      warn('Statische IP ohne Gateway: Der Rechner erreicht nur das lokale Subnetz.');
     }
     if (cfg.diskMode === 'partition' && !cfg.wipeDisk) {
-      warnings.push('Bestehende Partition ohne Löschen: Windows wird auf die angegebene Partition installiert, vorhandene Daten bleiben erhalten.');
+      add('hint', 'Bestehende Partition ohne Löschen: Windows wird auf die angegebene Partition installiert, vorhandene Daten bleiben erhalten.');
     }
     if (!isServer(cfg) && !cfg.userName && !cfg.administratorPassword) {
-      warnings.push('Weder lokales Konto noch Administratorkennwort gesetzt – Windows fragt die Zugangsdaten im OOBE ab.');
+      warn('Weder lokales Konto noch Administratorkennwort gesetzt – Windows fragt die Zugangsdaten im OOBE ab.');
     }
     if (!isServer(cfg) && !cfg.hideOnlineAccountScreens) {
-      warnings.push('Ohne „Microsoft-Konto-Anmeldung überspringen“ kann das OOBE eine Online-Anmeldung verlangen. ' +
+      warn('Ohne „Microsoft-Konto-Anmeldung überspringen“ kann das OOBE eine Online-Anmeldung verlangen. ' +
         'Der frühere Registry-Wert BypassNRO greift seit Windows 11 24H2 nicht mehr zuverlässig – der belastbare Weg ist das lokale Konto aus der Antwortdatei.');
     }
     if (cfg.domainJoin) {
       if (!cfg.domainName) {
-        warnings.push('Domänenbeitritt ist aktiv, aber keine Domäne angegeben – der Beitritt wird weggelassen.');
+        add('error', 'Domänenbeitritt ist aktiv, aber keine Domäne angegeben – der Beitritt wird weggelassen.');
       } else if (!isDomainName(cfg.domainName)) {
-        warnings.push('„' + cfg.domainName + '“ ist kein gültiger Domänenname. Bitte den vollständigen DNS-Namen angeben, z. B. firma.local oder ad.firma.de.');
+        add('error', '„' + cfg.domainName + '“ ist kein gültiger Domänenname. Bitte den vollständigen DNS-Namen angeben, z. B. firma.local oder ad.firma.de.');
       }
       if (cfg.domainName && (!cfg.domainUser || !cfg.domainPassword)) {
-        warnings.push('Für den Domänenbeitritt fehlen Domänenkonto oder Kennwort – Setup kann nicht beitreten und bricht an dieser Stelle ab.');
+        add('error', 'Für den Domänenbeitritt fehlen Domänenkonto oder Kennwort – Setup kann nicht beitreten und bricht an dieser Stelle ab.');
       }
       if (cfg.domainOu && !isDistinguishedName(cfg.domainOu)) {
-        warnings.push('Die Organisationseinheit muss als Distinguished Name angegeben werden, z. B. OU=Arbeitsplätze,DC=firma,DC=local.');
+        add('error', 'Die Organisationseinheit muss als Distinguished Name angegeben werden, z. B. OU=Arbeitsplätze,DC=firma,DC=local.');
       }
       if (!cfg.computerName || cfg.computerName.indexOf('*') !== -1) {
-        warnings.push('Ohne festen Computernamen legt der Domänenbeitritt ein Konto mit dem Zufallsnamen von Windows an – für die Domäne bitte einen festen Namen bis 15 Zeichen eintragen.');
+        warn('Ohne festen Computernamen legt der Domänenbeitritt ein Konto mit dem Zufallsnamen von Windows an – für die Domäne bitte einen festen Namen bis 15 Zeichen eintragen.');
       }
       if (!cfg.userName && !cfg.administratorPassword) {
-        warnings.push('Domänenbeitritt ohne lokales Konto und ohne Administratorkennwort: Danach ist nur die Anmeldung mit einem Domänenkonto möglich. Ohne erreichbaren Domänencontroller kommt niemand auf den Rechner.');
+        warn('Domänenbeitritt ohne lokales Konto und ohne Administratorkennwort: Danach ist nur die Anmeldung mit einem Domänenkonto möglich. Ohne erreichbaren Domänencontroller kommt niemand auf den Rechner.');
       }
     }
     if (cfg.editionMode === 'name' && /^\d+$/.test(cfg.editionValue)) {
-      warnings.push('Edition wird über den Namen gewählt, der Wert ist aber eine Zahl. Bitte den Image-Namen eintragen (z. B. "Windows 11 Pro").');
+      add('error', 'Edition wird über den Namen gewählt, der Wert ist aber eine Zahl. Bitte den Image-Namen eintragen (z. B. "Windows 11 Pro").');
     }
     if (cfg.userName) {
       var reservedNames = ['administrator', 'guest', 'defaultaccount', 'system',
         'network service', 'local service', 'none', 'wdagutilityaccount'];
       if (cfg.userName.length > 20) {
-        warnings.push('Der Benutzername ist länger als 20 Zeichen – Windows kürzt ihn beim Anlegen des Kontos.');
+        warn('Der Benutzername ist länger als 20 Zeichen – Windows kürzt ihn beim Anlegen des Kontos.');
       } else if (/[/\\[\]:;|=,+*?<>"%]/.test(cfg.userName)) {
-        warnings.push('Der Benutzername enthält Zeichen, die Windows nicht zulässt: / \\ [ ] : ; | = , + * ? < > " %.');
+        warn('Der Benutzername enthält Zeichen, die Windows nicht zulässt: / \\ [ ] : ; | = , + * ? < > " %.');
       } else if (/\.$/.test(cfg.userName)) {
-        warnings.push('Der Benutzername darf nicht mit einem Punkt enden.');
+        warn('Der Benutzername darf nicht mit einem Punkt enden.');
       } else if (reservedNames.indexOf(cfg.userName.toLowerCase()) !== -1) {
-        warnings.push('„' + cfg.userName + '“ ist ein reservierter Kontoname (u. a. Administrator, Guest, DefaultAccount, WDAGUtilityAccount) und kann nicht angelegt werden.');
+        add('error', '„' + cfg.userName + '“ ist ein reservierter Kontoname (u. a. Administrator, Guest, DefaultAccount, WDAGUtilityAccount) und kann nicht angelegt werden.');
       }
     }
     if (cfg.productKey === '' && !cfg.oemProductKey) {
       if (cfg.editionMode === 'choose') {
-        warnings.push('Interaktive Edition: Das Setup bekommt den Platzhalter-Schlüssel 00000-00000-00000-00000-00000 und zeigt die Schlüssel- und Editionsseite. Bei Multi-Edition-Images erscheint trotzdem manchmal nur eine Edition – dann hilft eine eigene sources\\ei.cfg neben dem boot.wim.');
+        add('hint', 'Interaktive Edition: Das Setup bekommt den Platzhalter-Schlüssel 00000-00000-00000-00000-00000 und zeigt die Schlüssel- und Editionsseite. Bei Multi-Edition-Images erscheint trotzdem manchmal nur eine Edition – dann hilft eine eigene sources\\ei.cfg neben dem boot.wim.');
       } else {
-        warnings.push('Ohne Produktschlüssel fragt das Setup nach dem Schlüssel.');
+        add('hint', 'Ohne Produktschlüssel fragt das Setup nach dem Schlüssel.');
       }
     }
 
@@ -1239,44 +1247,44 @@
       var kmsName = kms.scope === 'server'
         ? 'Windows Server ' + kms.version + ' ' + kms.edition
         : kms.label;
-      warnings.push('Dies ist ein KMS-Clientschlüssel (GVLK) für ' + kmsName +
+      add('hint', 'Dies ist ein KMS-Clientschlüssel (GVLK) für ' + kmsName +
         ': Er aktiviert nur gegen einen KMS-Host im eigenen Netz, nicht als Lizenz. Den echten Schlüssel später mit „slmgr /ipk“ nachtragen.');
 
       /* Nur die Zuordnung melden, die tatsächlich zutrifft: erst Client/Server,
          dann – nur bei Server-Ziel – Version und Edition. */
       if (kms.scope === 'server' && !isServer(cfg)) {
-        warnings.push('Der KMS-Schlüssel gehört zu ' + kmsName + ', die Zielversion ist aber ein Client-Betriebssystem.');
+        add('error', 'Der KMS-Schlüssel gehört zu ' + kmsName + ', die Zielversion ist aber ein Client-Betriebssystem.');
       } else if (kms.scope === 'client' && isServer(cfg)) {
-        warnings.push('Der KMS-Schlüssel gehört zu einer Client-Edition, die Zielversion ist aber Windows Server.');
+        add('error', 'Der KMS-Schlüssel gehört zu einer Client-Edition, die Zielversion ist aber Windows Server.');
       } else if (kms.scope === 'server') {
         if (kms.version !== cfg.serverVersion) {
-          warnings.push('Der KMS-Schlüssel gehört zu Windows Server ' + kms.version + ', die Zielversion ist ' + cfg.serverVersion + '.');
+          add('error', 'Der KMS-Schlüssel gehört zu Windows Server ' + kms.version + ', die Zielversion ist ' + cfg.serverVersion + '.');
         }
         if (kms.edition !== cfg.serverEdition) {
-          warnings.push('Der KMS-Schlüssel gehört zu ' + kms.edition + ', die Server-Edition ist ' + cfg.serverEdition + '.');
+          add('error', 'Der KMS-Schlüssel gehört zu ' + kms.edition + ', die Server-Edition ist ' + cfg.serverEdition + '.');
         }
       }
     }
 
     if (cfg.oemProductKey) {
       if (cfg.productKey) {
-        warnings.push('„Schlüssel aus der Firmware“ ist aktiv – der eingetragene Produktschlüssel wird deshalb nicht in die Datei geschrieben.');
+        warn('„Schlüssel aus der Firmware“ ist aktiv – der eingetragene Produktschlüssel wird deshalb nicht in die Datei geschrieben.');
       }
       if (cfg.editionMode === 'choose') {
-        warnings.push('Ohne <ProductKey> erscheint die Schlüssel-/Editionsseite nur, wenn im BIOS kein Schlüssel hinterlegt ist. Sonst entscheidet der Firmware-Schlüssel über die Edition.');
+        add('hint', 'Ohne <ProductKey> erscheint die Schlüssel-/Editionsseite nur, wenn im BIOS kein Schlüssel hinterlegt ist. Sonst entscheidet der Firmware-Schlüssel über die Edition.');
       }
     }
 
     var imageVersion = (/^Windows (10|11)\b/i.exec(cfg.editionValue) || [])[1];
     if (imageVersion && !isServer(cfg) && cfg.target !== 'windows' + imageVersion) {
-      warnings.push('Der Image-Name gehört zu Windows ' + imageVersion + ', die Zielversion ist aber Windows ' +
+      add('error', 'Der Image-Name gehört zu Windows ' + imageVersion + ', die Zielversion ist aber Windows ' +
         (cfg.target === 'windows10' ? '10' : '11') + '.');
     }
     if ((ltscLike || family === 'client10' || family === 'client11') && isServer(cfg)) {
-      warnings.push('Der Image-Name gehört zu einer Client-Edition, die Zielversion steht aber auf Windows Server.');
+      add('error', 'Der Image-Name gehört zu einer Client-Edition, die Zielversion steht aber auf Windows Server.');
     }
     if (family === 'azure' && !isServer(cfg)) {
-      warnings.push('„Datacenter: Azure Edition“ ist eine Server-Edition – bitte die Zielversion auf Windows Server stellen.');
+      warn('„Datacenter: Azure Edition“ ist eine Server-Edition – bitte die Zielversion auf Windows Server stellen.');
     }
     if (ltscLike) {
       var pointless = [];
@@ -1285,45 +1293,51 @@
       if (cfg.disableAppSuggestions) pointless.push('App-Vorschläge');
       if (cfg.uninstallOneDrive) pointless.push('OneDrive');
       if (pointless.length) {
-        warnings.push('LTSC bringt weder Store-Apps noch Consumer-Features (' + pointless.join(', ') + ') – diese Optionen laufen ins Leere.');
+        add('hint', 'LTSC bringt weder Store-Apps noch Consumer-Features (' + pointless.join(', ') + ') – diese Optionen laufen ins Leere.');
       }
     }
     if (iot && cfg.target === 'windows11' && (cfg.bypassTpm || cfg.bypassSecureBoot)) {
-      warnings.push('Windows 11 IoT Enterprise LTSC hat TPM und Secure Boot optional – die Hardware-Bypässe sind unnötig.');
+      add('hint', 'Windows 11 IoT Enterprise LTSC hat TPM und Secure Boot optional – die Hardware-Bypässe sind unnötig.');
     }
     if (family === 'azure') {
-      warnings.push('Datacenter: Azure Edition gibt es nur als Virtualisierungs-Edition (Azure bzw. Evaluierungsmedium) und nur mit Aktivierung über Azure. Das Image muss auf dem Medium vorhanden sein.');
+      warn('Datacenter: Azure Edition gibt es nur als Virtualisierungs-Edition (Azure bzw. Evaluierungsmedium) und nur mit Aktivierung über Azure. Das Image muss auf dem Medium vorhanden sein.');
     }
 
     if (cfg.lockoutMode === 'custom' && Number(cfg.lockoutWindow) > Number(cfg.lockoutDuration)) {
-      warnings.push('Das Sperrfenster darf nicht größer als die Sperrdauer sein – net accounts lehnt diese Kombination ab.');
+      warn('Das Sperrfenster darf nicht größer als die Sperrdauer sein – net accounts lehnt diese Kombination ab.');
     }
     if (encodePowerShell(cfg.specializeScript).length > 7000) {
-      warnings.push('Das specialize-Skript ist sehr lang. Die kodierte Befehlszeile kann das Windows-Limit von 32.767 Zeichen überschreiten.');
+      warn('Das specialize-Skript ist sehr lang. Die kodierte Befehlszeile kann das Windows-Limit von 32.767 Zeichen überschreiten.');
     }
     if (encodePowerShell(cfg.firstLogonScript).length > 7000) {
-      warnings.push('Das FirstLogon-Skript ist sehr lang. Die kodierte Befehlszeile kann das Windows-Limit von 32.767 Zeichen überschreiten.');
+      warn('Das FirstLogon-Skript ist sehr lang. Die kodierte Befehlszeile kann das Windows-Limit von 32.767 Zeichen überschreiten.');
     }
 
     if (isServer(cfg)) {
       if (cfg.architecture !== 'amd64') {
-        warnings.push('Windows Server 2016 und neuer gibt es nur für x64. Bitte die Architektur auf amd64 stellen.');
+        add('error', 'Windows Server 2016 und neuer gibt es nur für x64. Bitte die Architektur auf amd64 stellen.');
       }
       if (!cfg.administratorPassword) {
-        warnings.push('Server fragt ohne Kennwort interaktiv nach dem Administratorkennwort. Bitte „Kennwort des integrierten Administrators“ setzen.');
+        warn('Server fragt ohne Kennwort interaktiv nach dem Administratorkennwort. Bitte „Kennwort des integrierten Administrators“ setzen.');
       }
       if (cfg.editionMode !== 'name') {
-        warnings.push('Server-Medien haben je nach Version und Sprache unterschiedliche Image-Indizes. Die Auswahl über den Image-Namen ist eindeutiger.');
+        add('hint', 'Server-Medien haben je nach Version und Sprache unterschiedliche Image-Indizes. Die Auswahl über den Image-Namen ist eindeutiger.');
       }
       if (hasClientOnlyOptions(cfg)) {
-        warnings.push('Client-Optionen (Hardware-Bypass, Microsoft-Konto, Werbeinhalte, Apps, OneDrive, Desktop-Anpassungen) werden für Server nicht in die Datei übernommen.');
+        add('hint', 'Client-Optionen (Hardware-Bypass, Microsoft-Konto, Werbeinhalte, Apps, OneDrive, Desktop-Anpassungen) werden für Server nicht in die Datei übernommen.');
       }
       if (cfg.serverInstallType === 'core' && lines(cfg.firstLogonCommands).length) {
-        warnings.push('Server Core hat keinen Desktop: FirstLogonCommands laufen erst nach einer interaktiven Anmeldung. Systemweite Befehle gehören in den specialize-Pass.');
+        warn('Server Core hat keinen Desktop: FirstLogonCommands laufen erst nach einer interaktiven Anmeldung. Systemweite Befehle gehören in den specialize-Pass.');
       }
     }
 
-    return warnings;
+    return issues;
+  }
+
+  /* Wie collectIssues, aber nur die Texte – für Doku, Prüfungen und alle,
+     die keine Schweregrade brauchen. */
+  function analyze(input) {
+    return collectIssues(input).map(function (issue) { return issue.text; });
   }
 
   return {
@@ -1337,6 +1351,7 @@
     normalize: normalize,
     buildUnattend: buildUnattend,
     analyze: analyze,
+    issues: collectIssues,
     kmsKeys: KMS_KEYS,
     kmsKeyFor: findKmsKey,
     escape: esc

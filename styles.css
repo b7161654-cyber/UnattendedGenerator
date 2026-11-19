@@ -281,8 +281,39 @@ select {
   overflow: auto;
 }
 
-.warnings ul { margin: 0; padding-left: 18px; }
-.warnings li + li { margin-top: 4px; }
+.warnings ul { margin: 0; padding: 0; list-style: none; }
+.warnings li + li { margin-top: 6px; }
+.warnings.has-errors { background: rgba(255, 96, 96, 0.09); border-color: rgba(255, 96, 96, 0.38); color: #ffd0d0; }
+.warnings li.issue { display: flex; gap: 8px; align-items: baseline; }
+.issue-level {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.warnings li.is-error .issue-level { background: rgba(255, 96, 96, 0.28); color: #ffb3b3; }
+.warnings li.is-hint { color: #c3d0de; }
+.warnings li.is-hint .issue-level { background: rgba(140, 170, 200, 0.2); color: #c3d0de; }
+
+.issue-summary { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 5px 0 0; font-size: 12px; }
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.badge.is-error { background: rgba(255, 96, 96, 0.16); border-color: rgba(255, 96, 96, 0.45); color: #ffb3b3; }
+.badge.is-warn { background: rgba(255, 200, 96, 0.14); border-color: rgba(255, 200, 96, 0.4); color: #ffd894; }
+.badge.is-hint { background: rgba(140, 170, 200, 0.14); border-color: rgba(140, 170, 200, 0.35); color: #c3d0de; }
+.issue-summary-note { color: #ffb3b3; }
+
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .code {
   flex: 1 1 auto;

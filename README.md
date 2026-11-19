@@ -19,6 +19,7 @@ Erzeugt eine `autounattend.xml` für die unbeaufsichtigte Installation von Windo
 - Kontorichtlinien: Kennwortablauf und Kontosperrung über `net accounts`
 - Statische IPv4-Konfiguration, eigene Befehle pro Pass und mehrzeilige PowerShell-Skripte, die als base64 an `-EncodedCommand` gehen
 - Vorlagen, Export/Import der Konfiguration als JSON, automatisches Speichern im Browser
+- Ampel über der Vorschau: jede Meldung ist Fehler, Warnung oder Hinweis; bei echten Fehlern bleibt der Download gesperrt
 
 ## Lokale Nutzung
 
@@ -30,6 +31,16 @@ Erzeugt eine `autounattend.xml` für die unbeaufsichtigte Installation von Windo
 Die Oberfläche ist für schmale Bildschirme optimiert: einspaltiges Formular, mindestens 44 px hohe Tippflächen, 16-px-Felder gegen das automatische Zoomen auf iOS, waagerecht scrollbare Sprungmarken und ein schwebender Knopf "Vorschau & Download", der zur XML-Vorschau springt und verschwindet, sobald sie sichtbar ist.
 
 Die Seite verwendet bewusst klassische `<script>`-Tags statt ES-Modulen, damit sie auch über `file://` funktioniert. Alle Daten bleiben im Browser; die Konfiguration wird lediglich im `localStorage` gespeichert und lässt sich dort über **Zurücksetzen** wieder verwerfen.
+
+## Fehler, Warnungen, Hinweise
+
+Über der XML-Vorschau steht die Ampel: Sie zählt die Meldungen zur aktuellen Konfiguration.
+
+- **Fehler** (rot) – die Datei kann so nicht arbeiten, weil Setup abbricht oder nicht tut, was eingestellt ist. Beispiele: Domänenbeitritt ohne gültige Domäne oder ohne Konto, Windows-11-Image bei Zielversion 10, x86 für Windows 11, Ziffer im Image-Namen, KMS-Schlüssel für ein anderes Produkt. Solange ein Fehler offen ist, bleibt **Herunterladen** gesperrt.
+- **Warnungen** (gelb) – ein Risiko, aber die Datei läuft: Autologon ohne Kennwort, Partition ohne Löschen, Server ohne Administratorkennwort, Sperrfenster größer als die Sperrdauer.
+- **Hinweise** (blau) – Erklärungen ohne Handlungsbedarf: GVLK aktiviert nur gegen einen KMS-Host, LTSC-Optionen laufen ins Leere, ohne Produktschlüssel fragt das Setup nach dem Schlüssel, ohne `AcceptEula` hält es an der Lizenzseite an.
+
+Im Code liefert `UnattendGenerator.issues(cfg)` die Objekte mit `level` (`error`, `warn`, `hint`) und `text`; `analyze(cfg)` gibt weiterhin nur die Texte zurück. Die Schweregrade stehen direkt an der jeweiligen Prüfung in `generator.js`.
 
 ## Datei auf das Installationsmedium legen
 

@@ -64,6 +64,7 @@
   var presetSelect = document.getElementById('presetSelect');
 
   var currentXml = '';
+  var downloadBlocked = false;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -314,16 +315,54 @@
     return html;
   }
 
-  function renderWarnings(list) {
+  var LEVEL_LABELS = { error: 'Fehler', warn: 'Warnung', hint: 'Hinweis' };
+
+  function hasErrors(list) {
+    return list.some(function (item) { return item.level === 'error'; });
+  }
+
+  /* Meldungen mit Schweregrad: Fehler rot, Warnungen gelb, Hinweise blau. */
+  function renderIssues(list) {
     if (!list.length) {
       warningsBox.hidden = true;
+      warningsBox.className = 'warnings';
       warningsBox.innerHTML = '';
       return;
     }
     warningsBox.hidden = false;
+    warningsBox.className = 'warnings' + (hasErrors(list) ? ' has-errors' : '');
     warningsBox.innerHTML = '<ul>' + list.map(function (item) {
-      return '<li>' + G.escape(item) + '</li>';
+      return '<li class="issue is-' + item.level + '">' +
+        '<span class="issue-level">' + LEVEL_LABELS[item.level] + '</span>' +
+        '<span>' + G.escape(item.text) + '</span></li>';
     }).join('') + '</ul>';
+  }
+
+  /* Ampel über der Vorschau: zählt die Meldungen und nennt den Grund für die Sperre. */
+  function renderIssueSummary(list) {
+    var counts = { error: 0, warn: 0, hint: 0 };
+    list.forEach(function (item) { counts[item.level] += 1; });
+
+    var badges = [];
+    if (counts.error) badges.push(['error', counts.error + ' Fehler']);
+    if (counts.warn) badges.push(['warn', counts.warn + (counts.warn === 1 ? ' Warnung' : ' Warnungen')]);
+    if (counts.hint) badges.push(['hint', counts.hint + (counts.hint === 1 ? ' Hinweis' : ' Hinweise')]);
+
+    var box = byId('issueSummary');
+    if (!box) return;
+    box.hidden = !badges.length;
+    box.className = 'issue-summary' + (counts.error ? ' has-errors' : '');
+    box.innerHTML = badges.map(function (badge) {
+      return '<span class="badge is-' + badge[0] + '">' + badge[1] + '</span>';
+    }).join(' ') + (counts.error ? ' <span class="issue-summary-note">Download gesperrt, bis die Fehler behoben sind.</span>' : '');
+  }
+
+  /* Echte Fehler sperren den Download, Warnungen und Hinweise nicht. */
+  function setDownloadBlocked(blocked) {
+    downloadBlocked = blocked;
+    var button = byId('btnDownload');
+    button.disabled = blocked;
+    button.title = blocked ? 'Download gesperrt, bis die Fehler behoben sind.' : '';
   }
 
   function updateSummary(xml) {
@@ -345,11 +384,16 @@
       currentXml = G.buildUnattend(cfg);
       preview.innerHTML = colorize(currentXml);
       updateSummary(currentXml);
-      renderWarnings(G.analyze(cfg));
+      var issues = G.issues(cfg);
+      renderIssueSummary(issues);
+      renderIssues(issues);
+      setDownloadBlocked(hasErrors(issues));
     } catch (error) {
       currentXml = '';
       preview.textContent = 'Fehler beim Erzeugen der Datei:\n' + error.message;
-      renderWarnings([]);
+      renderIssueSummary([]);
+      renderIssues([]);
+      setDownloadBlocked(true);
     }
 
     if (saveTimer) clearTimeout(saveTimer);
@@ -408,6 +452,8 @@
     button.disabled = true;
     setTimeout(function () {
       button.textContent = original;
+      /* Ein zwischenzeitlich gesperrter Download bleibt gesperrt. */
+      if (button.id === 'btnDownload' && downloadBlocked) return;
       button.disabled = false;
     }, 1200);
   }
@@ -489,7 +535,7 @@
     });
 
     byId('btnDownload').addEventListener('click', function () {
-      if (!currentXml) return;
+      if (!currentXml || downloadBlocked) return;
       download('autounattend.xml', currentXml, 'application/xml;charset=utf-8');
       flash(byId('btnDownload'), 'Gespeichert');
     });
