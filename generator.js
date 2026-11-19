@@ -23,6 +23,51 @@
   var XSI_NS = 'http://www.w3.org/2001/XMLSchema-instance';
   var PUBLIC_KEY_TOKEN = '31bf3856ad364e35';
 
+  /* Offizielle KMS-Clientschlüssel (GVLK), veröffentlicht von Microsoft:
+     https://learn.microsoft.com/windows-server/get-started/kms-client-activation-keys
+     Sie aktivieren ausschließlich gegen einen KMS-Host im eigenen Netz und
+     sind keine Lizenz – der echte Schlüssel wird später per
+     "slmgr /ipk <Schlüssel>" nachgetragen. */
+  var KMS_KEYS = [
+    { id: 'win-pro', group: 'Windows 11 / 10', label: 'Pro', scope: 'client', key: 'W269N-WFGWX-YVC9B-4J6C9-T83GX' },
+    { id: 'win-pro-n', group: 'Windows 11 / 10', label: 'Pro N', scope: 'client', key: 'MH37W-N47XK-V7XM9-C7227-GCQG9' },
+    { id: 'win-pro-workstations', group: 'Windows 11 / 10', label: 'Pro for Workstations', scope: 'client', key: 'NRG8B-VKK3Q-CXVCJ-9G2XF-6Q84J' },
+    { id: 'win-pro-workstations-n', group: 'Windows 11 / 10', label: 'Pro for Workstations N', scope: 'client', key: '9FNHH-K3HBT-3W4TD-6383H-6XYWF' },
+    { id: 'win-pro-education', group: 'Windows 11 / 10', label: 'Pro Education', scope: 'client', key: '6TP4R-GNPTD-KYYHQ-7B7DP-J447Y' },
+    { id: 'win-pro-education-n', group: 'Windows 11 / 10', label: 'Pro Education N', scope: 'client', key: 'YVWGF-BXNMC-HTQYQ-CPQ99-66QFC' },
+    { id: 'win-education', group: 'Windows 11 / 10', label: 'Education', scope: 'client', key: 'NW6C2-QMPVW-D7KKK-3GKT6-VCFB2' },
+    { id: 'win-education-n', group: 'Windows 11 / 10', label: 'Education N', scope: 'client', key: '2WH4N-8QGBV-H22JP-CT43Q-MDWWJ' },
+    { id: 'win-enterprise', group: 'Windows 11 / 10', label: 'Enterprise', scope: 'client', key: 'NPPR9-FWDCX-D2C8J-H872K-2YT43' },
+    { id: 'win-enterprise-n', group: 'Windows 11 / 10', label: 'Enterprise N', scope: 'client', key: 'DPH2V-TTNVB-4X9Q3-TJR4H-KHJW4' },
+    { id: 'win-enterprise-g', group: 'Windows 11 / 10', label: 'Enterprise G', scope: 'client', key: 'YYVX9-NTFWV-6MDM3-9PT4T-4M68B' },
+    { id: 'win-enterprise-g-n', group: 'Windows 11 / 10', label: 'Enterprise G N', scope: 'client', key: '44RPN-FTY23-9VTTB-MP9BX-T84FV' },
+    { id: 'ltsc-enterprise', group: 'LTSC / IoT Enterprise', label: 'Enterprise LTSC (2019, 2021, 2024)', scope: 'client', key: 'M7XTQ-FN8P6-TTKYV-9D4CC-J462D' },
+    { id: 'ltsc-enterprise-n', group: 'LTSC / IoT Enterprise', label: 'Enterprise N LTSC (2019, 2021, 2024)', scope: 'client', key: '92NFX-8DJQP-P6BBQ-THF9C-7CG2H' },
+    { id: 'iot-enterprise-ltsc', group: 'LTSC / IoT Enterprise', label: 'IoT Enterprise LTSC (2021, 2024)', scope: 'client', key: 'KBN8V-HFGQ4-MGXVD-347P6-PDQGT' },
+    { id: 'server2025-standard', group: 'Windows Server 2025', label: 'Standard', scope: 'server', version: '2025', edition: 'Standard', key: 'TVRH6-WHNXV-R9WG3-9XRFY-MY832' },
+    { id: 'server2025-datacenter', group: 'Windows Server 2025', label: 'Datacenter', scope: 'server', version: '2025', edition: 'Datacenter', key: 'D764K-2NDRG-47T6Q-P8T8W-YP6DF' },
+    { id: 'server2025-azure', group: 'Windows Server 2025', label: 'Datacenter: Azure Edition', scope: 'server', version: '2025', edition: 'Datacenter: Azure Edition', key: 'XGN3F-F394H-FD2MY-PP6FD-8MCRC' },
+    { id: 'server2022-standard', group: 'Windows Server 2022', label: 'Standard', scope: 'server', version: '2022', edition: 'Standard', key: 'VDYBN-27WPP-V4HQT-9VMD4-VMK7H' },
+    { id: 'server2022-datacenter', group: 'Windows Server 2022', label: 'Datacenter', scope: 'server', version: '2022', edition: 'Datacenter', key: 'WX4NM-KYWYW-QJJR4-XV3QB-6VM33' },
+    { id: 'server2022-azure', group: 'Windows Server 2022', label: 'Datacenter: Azure Edition', scope: 'server', version: '2022', edition: 'Datacenter: Azure Edition', key: 'NTBV8-9K7Q8-V27C6-M2BTV-KHMXV' },
+    { id: 'server2019-standard', group: 'Windows Server 2019', label: 'Standard', scope: 'server', version: '2019', edition: 'Standard', key: 'N69G4-B89J2-4G8F4-WWYCC-J464C' },
+    { id: 'server2019-datacenter', group: 'Windows Server 2019', label: 'Datacenter', scope: 'server', version: '2019', edition: 'Datacenter', key: 'WMDGN-G9PQG-XVVXX-R3X43-63DFG' },
+    { id: 'server2019-essentials', group: 'Windows Server 2019', label: 'Essentials', scope: 'server', version: '2019', edition: 'Essentials', key: 'WVDHN-86M7X-466P6-VHXV7-YY726' },
+    { id: 'server2016-standard', group: 'Windows Server 2016', label: 'Standard', scope: 'server', version: '2016', edition: 'Standard', key: 'WC2BQ-8NRM3-FDDYY-2BFGV-KHKQY' },
+    { id: 'server2016-datacenter', group: 'Windows Server 2016', label: 'Datacenter', scope: 'server', version: '2016', edition: 'Datacenter', key: 'CB7KF-BWN84-R7R2Y-793K2-8XDDG' },
+    { id: 'server2016-essentials', group: 'Windows Server 2016', label: 'Essentials', scope: 'server', version: '2016', edition: 'Essentials', key: 'JCKRF-N37P4-C2D82-9YXRT-4M63B' }
+  ];
+
+  /* Sucht einen Katalogschlüssel, unabhängig von Schreibweise und Leerzeichen. */
+  function findKmsKey(key) {
+    var value = String(key === undefined || key === null ? '' : key).trim().toUpperCase();
+    if (!value) return null;
+    for (var i = 0; i < KMS_KEYS.length; i++) {
+      if (KMS_KEYS[i].key === value) return KMS_KEYS[i];
+    }
+    return null;
+  }
+
   var DEFAULTS = {
     target: 'windows11',
     architecture: 'amd64',
@@ -992,6 +1037,27 @@
       }
     }
 
+    var kms = findKmsKey(cfg.productKey);
+    if (kms) {
+      var kmsName = kms.scope === 'server'
+        ? 'Windows Server ' + kms.version + ' ' + kms.edition
+        : kms.label;
+      warnings.push('„' + kms.key + '“ ist der offizielle KMS-Clientschlüssel (GVLK) für ' + kmsName +
+        ': Er aktiviert nur gegen einen KMS-Host im eigenen Netz und ist keine Lizenz. Den echten Schlüssel später mit „slmgr /ipk“ nachtragen – ohne KMS-Host bleibt Windows nicht aktiviert.');
+      if (kms.scope === 'server' && !isServer(cfg)) {
+        warnings.push('Der KMS-Schlüssel gehört zu ' + kmsName + ', die Zielversion ist aber ein Client-Betriebssystem.');
+      }
+      if (kms.scope === 'client' && isServer(cfg)) {
+        warnings.push('Der KMS-Schlüssel gehört zu einer Client-Edition, die Zielversion ist aber Windows Server.');
+      }
+      if (kms.scope === 'server' && kms.version !== cfg.serverVersion) {
+        warnings.push('Der KMS-Schlüssel gehört zu Windows Server ' + kms.version + ', die Zielversion ist ' + cfg.serverVersion + '.');
+      }
+      if (kms.scope === 'server' && kms.edition !== cfg.serverEdition) {
+        warnings.push('Der KMS-Schlüssel gehört zu ' + kms.edition + ', die Server-Edition ist ' + cfg.serverEdition + '.');
+      }
+    }
+
     var imageVersion = (/^Windows (10|11)\b/i.exec(cfg.editionValue) || [])[1];
     if (imageVersion && !isServer(cfg) && cfg.target !== 'windows' + imageVersion) {
       warnings.push('Der Image-Name gehört zu Windows ' + imageVersion + ', die Zielversion ist aber Windows ' +
@@ -1063,6 +1129,7 @@
     normalize: normalize,
     buildUnattend: buildUnattend,
     analyze: analyze,
+    kmsKeys: KMS_KEYS,
     escape: esc
   };
 });

@@ -9,6 +9,7 @@ Erzeugt eine `autounattend.xml` für die unbeaufsichtigte Installation von Windo
 - Sprache, Tastaturlayout, Zeitzone für Setup und installiertes System
 - Datenträger: GPT/UEFI oder MBR/BIOS neu anlegen, auf vorhandene Partition oder auf die erste freie Partition installieren
 - Lokale Konten, Administratorkennwort, automatische Anmeldung, OOBE-Seiten ausblenden
+- Produktschlüssel: eigener Schlüssel oder Auswahl aus den offiziellen KMS-Clientschlüsseln (GVLK) für Windows 11/10, LTSC/IoT Enterprise und Server 2016–2025 (Details unter „Volumenlizenz-Schlüssel (KMS)“)
 - Windows-11-Bypässe (TPM, Secure Boot, RAM, CPU, Microsoft-Konto)
 - Registry-Eingriffe zu Telemetrie, Cortana, Websuche, Copilot, RDP, UAC, Schnellstart, OneDrive und vorinstallierten Apps
 - Weitere Optimierungen: SmartScreen, Smart App Control, lange Pfade, Update-Neustart, BitLocker-Geräteverschlüsselung, Edge (Erstlauf, Startup-Boost, Desktop-Verknüpfung), Taskleiste, App-Vorschläge, Systemwiederherstellung, klassisches Kontextmenü
@@ -76,6 +77,14 @@ Was der Generator editionsabhängig prüft:
 - **Windows 11 IoT Enterprise LTSC** hat TPM 2.0 und Secure Boot optional. Die Warnung „TPM 2.0, Secure Boot und UEFI müssen vorhanden sein“ und die GPT-Pflicht entfallen daher, und gesetzte Hardware-Bypässe werden als unnötig gemeldet. Für **Windows 11 Enterprise LTSC 2024** gelten weiterhin die vollen Windows-11-Anforderungen.
 - **LTSC allgemein** bringt weder Store-Apps noch Consumer-Features. Optionen wie Apps entfernen, Werbeinhalte, App-Vorschläge, OneDrive oder Microsoft-Konto-Bypass laufen dort ins Leere und werden als solche gemeldet. Außerdem wird von der Index-Auswahl abgeraten, weil die LTSC-Medien mehrere Images enthalten und der Index leicht die falsche Edition trifft.
 - **Azure Edition** außerhalb der Zielversion „Windows Server“ sowie vertauschte Client-/Server-Image-Namen werden gemeldet, ebenso ein Windows-11-Image bei Zielversion Windows 10 (und umgekehrt).
+
+## Volumenlizenz-Schlüssel (KMS)
+
+Unter „Volumenlizenz-Schlüssel (KMS)“ stehen die von Microsoft veröffentlichten KMS-Clientschlüssel (GVLK) zur Auswahl: Windows 11/10 (Pro, Pro N, Pro for Workstations, Pro Education, Education, Enterprise, Enterprise G) sowie Enterprise LTSC und IoT Enterprise LTSC und alle Server-Editionen von 2016 bis 2025 (Standard, Datacenter, Datacenter: Azure Edition, Essentials). Die Auswahl trägt den Schlüssel in das Feld „Produktschlüssel“ ein, das weiterhin frei überschreibbar bleibt.
+
+Diese Schlüssel sind **keine Lizenzen**: Sie schalten nur die Aktivierung gegen einen KMS-Host im eigenen Netz. Ohne KMS-Host bleibt Windows im Status „nicht aktiviert“. Den echten Schlüssel – MAK oder KMS-Host-Key – trägt man nach der Installation mit `slmgr /ipk <Schlüssel>` nach; ein neues Setup ist dafür nicht nötig. Ein im Feld eingetragener eigener Schlüssel hat Vorrang und wird unverändert in die Datei geschrieben.
+
+Der Generator prüft die Zuordnung und meldet zum Beispiel einen Server-2022-Schlüssel bei Zielversion 2025, einen Client-Schlüssel auf einer Server-Installation oder eine abweichende Server-Edition. Quelle der Schlüssel: Microsoft Learn, [KMS client activation and product keys](https://learn.microsoft.com/windows-server/get-started/kms-client-activation-keys).
 
 ## Projektdateien
 

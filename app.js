@@ -80,6 +80,7 @@
     fillSimpleSelect(byId('serverVersion'), D.serverVersions, 'id', 'label');
     fillSimpleSelect(byId('serverEdition'), D.serverEditions, 'id', 'label');
     fillSimpleSelect(byId('serverInstallType'), D.serverInstallTypes, 'id', 'label');
+    fillKeyPresets();
 
     var standardEdition = document.createElement('option');
     standardEdition.value = 'custom';
@@ -134,6 +135,7 @@
       if (element) element.checked = !!merged[id];
     });
     syncEditionPreset();
+    syncKeyPreset();
   }
 
   function lockField(id, locked) {
@@ -169,6 +171,52 @@
     byId('target').value = preset.target;
     byId('editionMode').value = 'name';
     byId('editionValue').value = preset.image;
+  }
+
+  /* Offizielle KMS-Clientschlüssel als Auswahl, gruppiert nach Produkt. */
+  function fillKeyPresets() {
+    var select = byId('productKeyPreset');
+    var none = document.createElement('option');
+    none.value = '';
+    none.textContent = '– keiner, Setup fragen lassen –';
+    select.appendChild(none);
+
+    var groups = [];
+    G.kmsKeys.forEach(function (entry) {
+      var group = groups.filter(function (item) { return item.name === entry.group; })[0];
+      if (!group) {
+        var element = document.createElement('optgroup');
+        element.label = entry.group;
+        select.appendChild(element);
+        group = { name: entry.group, element: element };
+        groups.push(group);
+      }
+      var option = document.createElement('option');
+      option.value = entry.id;
+      option.textContent = entry.label;
+      group.element.appendChild(option);
+    });
+  }
+
+  /* Hält die KMS-Auswahl synchron, wenn der Schlüssel von Hand geändert wird. */
+  function syncKeyPreset() {
+    var value = byId('productKey').value.trim().toUpperCase();
+    var match = G.kmsKeys.filter(function (entry) { return entry.key === value; })[0];
+    byId('productKeyPreset').value = match ? match.id : '';
+  }
+
+  /* Trägt einen Katalogschlüssel ein; „keiner“ entfernt nur Katalogschlüssel. */
+  function applyKeyPreset() {
+    var id = byId('productKeyPreset').value;
+    var entry = G.kmsKeys.filter(function (item) { return item.id === id; })[0];
+    var field = byId('productKey');
+    if (entry) {
+      field.value = entry.key;
+      return;
+    }
+    var current = field.value.trim().toUpperCase();
+    var isCatalogKey = G.kmsKeys.some(function (item) { return item.key === current; });
+    if (isCatalogKey) field.value = '';
   }
 
   /* Hält die Vorlagenauswahl synchron, wenn der Name von Hand geändert wird. */
@@ -352,6 +400,7 @@
       /* Nur bei direkter Eingabe in den Image-Namen nachziehen – beim Aufklappen
          einer Auswahl darf die Auswahl nicht vor dem change-Ereignis kippen. */
       if (event.target && event.target.id === 'editionValue') syncEditionPreset();
+      if (event.target && event.target.id === 'productKey') syncKeyPreset();
       update();
     });
     form.addEventListener('change', function (event) {
@@ -372,6 +421,9 @@
           byId('userLocale').value = language.code;
           byId('inputLocale').value = language.inputLocale;
         }
+      }
+      if (event.target && event.target.id === 'productKeyPreset') {
+        applyKeyPreset();
       }
       if (event.target && event.target.id === 'editionPreset') {
         applyEditionPreset();

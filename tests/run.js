@@ -740,6 +740,92 @@ test('Produktschlüssel-Knoten ist nie leer (Issue #463 des Originals)', functio
   assert.strictEqual((interactive.match(/<ProductKey>/g) || []).length, 1);
 });
 
+/* ------------------------------------------------------------ KMS-GVLK */
+
+test('KMS-Katalog enthält die offiziellen Volumenlizenz-Schlüssel', function () {
+  var keys = G.kmsKeys;
+  assert.strictEqual(keys.length, 27);
+
+  var seenIds = {};
+  var seenKeys = {};
+  keys.forEach(function (entry) {
+    assert.ok(/^[A-Z0-9]{5}(-[A-Z0-9]{5}){4}$/.test(entry.key), 'Schlüsselformat: ' + entry.key);
+    assert.ok(!seenIds[entry.id], 'Doppelte id: ' + entry.id);
+    assert.ok(!seenKeys[entry.key], 'Doppelter Schlüssel: ' + entry.key);
+    assert.ok(entry.group && entry.label, 'Gruppe/Label fehlt: ' + entry.id);
+    seenIds[entry.id] = true;
+    seenKeys[entry.key] = true;
+  });
+
+  function keyOf(id) {
+    var entry = keys.filter(function (item) { return item.id === id; })[0];
+    assert.ok(entry, 'Katalogeintrag fehlt: ' + id);
+    return entry.key;
+  }
+
+  /* Stichproben gegen die Liste von Microsoft Learn. */
+  assert.strictEqual(keyOf('win-pro'), 'W269N-WFGWX-YVC9B-4J6C9-T83GX');
+  assert.strictEqual(keyOf('win-enterprise'), 'NPPR9-FWDCX-D2C8J-H872K-2YT43');
+  assert.strictEqual(keyOf('ltsc-enterprise'), 'M7XTQ-FN8P6-TTKYV-9D4CC-J462D');
+  assert.strictEqual(keyOf('server2016-datacenter'), 'CB7KF-BWN84-R7R2Y-793K2-8XDDG');
+  assert.strictEqual(keyOf('server2019-essentials'), 'WVDHN-86M7X-466P6-VHXV7-YY726');
+  assert.strictEqual(keyOf('server2022-datacenter'), 'WX4NM-KYWYW-QJJR4-XV3QB-6VM33');
+  assert.strictEqual(keyOf('server2025-azure'), 'XGN3F-F394H-FD2MY-PP6FD-8MCRC');
+});
+
+test('Katalogschlüssel landen unverändert in beiden Pässen', function () {
+  var entry = G.kmsKeys.filter(function (item) { return item.id === 'win-pro'; })[0];
+  var xml = build({ productKey: entry.key });
+  assert.strictEqual((xml.match(new RegExp(entry.key, 'g')) || []).length, 2);
+  assertWellFormed(xml);
+});
+
+test('KMS-Schlüssel werden erkannt und als GVLK erklärt', function () {
+  var text = warningText({ productKey: 'W269N-WFGWX-YVC9B-4J6C9-T83GX' });
+  warns(text, 'KMS-Clientschlüssel (GVLK)');
+  warns(text, 'slmgr /ipk');
+
+  doesNotWarn(warningText({ productKey: 'VK7JG-NPHTM-C97JM-9MPGT-3V66T' }), 'GVLK');
+
+  /* Schreibweise und Leerzeichen ändern die Zuordnung nicht. */
+  warns(warningText({ productKey: ' w269n-wfgwx-yvc9b-4j6c9-t83gx ' }), 'GVLK');
+});
+
+test('KMS-Schlüssel werden gegen Zielsystem, Version und Edition geprüft', function () {
+  var server2022 = {
+    target: 'server',
+    serverVersion: '2022',
+    serverEdition: 'Datacenter',
+    editionMode: 'name',
+    editionValue: 'Windows Server 2022 Datacenter (Desktop Experience)',
+    administratorPassword: 'x',
+    productKey: 'WX4NM-KYWYW-QJJR4-XV3QB-6VM33'
+  };
+
+  var matching = warningText(server2022);
+  doesNotWarn(matching, 'die Zielversion ist');
+  doesNotWarn(matching, 'Server-Edition ist');
+  doesNotWarn(matching, 'Client-Betriebssystem');
+
+  /* 2025 als Zielversion, aber der Schlüssel gehört zu 2022. */
+  warns(warningText(Object.assign({}, server2022, { serverVersion: '2025' })), 'die Zielversion ist 2025');
+
+  /* Passende Version, falsche Edition. */
+  warns(warningText(Object.assign({}, server2022, { serverEdition: 'Standard' })), 'Server-Edition ist Standard');
+
+  /* Server-Schlüssel auf einer Client-Installation. */
+  warns(warningText({ target: 'windows11', productKey: 'TVRH6-WHNXV-R9WG3-9XRFY-MY832' }), 'Client-Betriebssystem');
+
+  /* Client-Schlüssel auf einer Server-Installation. */
+  warns(warningText({
+    target: 'server',
+    serverVersion: '2025',
+    serverEdition: 'Standard',
+    administratorPassword: 'x',
+    productKey: 'NPPR9-FWDCX-D2C8J-H872K-2YT43'
+  }), 'die Zielversion ist aber Windows Server');
+});
+
 test('Computernamen: Zufall nur als einzelnes *, keine reinen Ziffern', function () {
   var star = warningText({ computerName: '*' });
   doesNotWarn(star, 'Zufallsnamen');

@@ -92,6 +92,11 @@
           <input type="text" id="productKey" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX">
           <small>Leer lassen, wenn Setup fragen soll. Bei „Setup fragen lassen“ wird ein Platzhalter eingetragen, damit die Seite erscheint.</small>
         </label>
+        <label class="field wide">
+          <span>Volumenlizenz-Schlüssel (KMS)</span>
+          <select id="productKeyPreset"></select>
+          <small>Offizielle KMS-Clientschlüssel (GVLK) von Microsoft: Sie aktivieren nur gegen einen KMS-Host im eigenen Netz. Der echte Lizenzschlüssel lässt sich nach der Installation mit „slmgr /ipk“ nachtragen.</small>
+        </label>
         <label class="field">
           <span>Computername</span>
           <input type="text" id="computerName" maxlength="15" placeholder="z. B. PC-01">
