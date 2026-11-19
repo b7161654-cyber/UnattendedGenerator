@@ -4,6 +4,17 @@
  *
  * Enthält einen kleinen XML-Wohlgeformtheitsprüfer, damit die erzeugten
  * Dateien nicht nur "irgendwie" aussehen, sondern sauber verschachtelt sind.
+ *
+ * Helfer, die jeden Test kurz halten:
+ *   build(overrides)      Konfiguration aus Vorgaben bauen und XML erzeugen
+ *   warningText(overrides) dieselbe Konfiguration durch analyze() schicken
+ *   has/hasNot(xml, …)    Teilstring muss vorkommen bzw. fehlen
+ *   warns/doesNotWarn()   Warnung muss vorkommen bzw. fehlen
+ *   assertWellFormed()    XML-Struktur prüfen (Tags, Kommentare, Attribute)
+ *
+ * Ein neuer Test ist eine `test('Name', function () { … })`-Zeile; die
+ * Zählung am Ende läuft automatisch mit. Tests decken bewusst Logik ab
+ * (XML-Ausgabe, Warnungen), nicht die Oberfläche.
  */
 'use strict';
 
@@ -544,9 +555,10 @@ function doesNotWarn(text, snippet) {
 }
 
 test('LTSC-/IoT-Vorlagen nennen den Image-Namen und die passende Zielversion', function () {
-  assert.strictEqual(D.editionPresets.length, 6);
-  D.editionPresets.forEach(function (preset) {
-    assert.strictEqual(preset.label, preset.image, 'Vorlagenname und Image-Name weichen ab: ' + preset.id);
+  var editions = D.editionsFor('windows10').concat(D.editionsFor('windows11'))
+    .filter(function (entry) { return entry.family; });
+  assert.strictEqual(editions.length, 6);
+  editions.forEach(function (preset) {
     assert.ok(/ LTSC \d{4}$/.test(preset.image), 'Image-Name endet nicht auf LTSC <Jahr>: ' + preset.image);
     if (preset.target === 'windows10') assert.ok(/^Windows 10 /.test(preset.image), preset.image);
     if (preset.target === 'windows11') assert.ok(/^Windows 11 /.test(preset.image), preset.image);
@@ -771,6 +783,11 @@ test('KMS-Katalog enthält die offiziellen Volumenlizenz-Schlüssel', function (
   assert.strictEqual(keyOf('server2019-essentials'), 'WVDHN-86M7X-466P6-VHXV7-YY726');
   assert.strictEqual(keyOf('server2022-datacenter'), 'WX4NM-KYWYW-QJJR4-XV3QB-6VM33');
   assert.strictEqual(keyOf('server2025-azure'), 'XGN3F-F394H-FD2MY-PP6FD-8MCRC');
+
+  /* Nachschlagen unabhängig von Schreibweise und Leerzeichen. */
+  assert.strictEqual(G.kmsKeyFor(' w269n-wfgwx-yvc9b-4j6c9-t83gx ').id, 'win-pro');
+  assert.strictEqual(G.kmsKeyFor(''), null);
+  assert.strictEqual(G.kmsKeyFor('XXXXX-XXXXX-XXXXX-XXXXX-XXXXX'), null);
 });
 
 test('Katalogschlüssel landen unverändert in beiden Pässen', function () {
@@ -824,6 +841,85 @@ test('KMS-Schlüssel werden gegen Zielsystem, Version und Edition geprüft', fun
     administratorPassword: 'x',
     productKey: 'NPPR9-FWDCX-D2C8J-H872K-2YT43'
   }), 'die Zielversion ist aber Windows Server');
+});
+
+test('Server-Schlüssel auf Client-Ziel erzeugt nur eine Zuordnungswarnung', function () {
+  var text = warningText({ target: 'windows11', productKey: 'TVRH6-WHNXV-R9WG3-9XRFY-MY832' });
+  var lines = text.split('\n').filter(function (line) { return line.indexOf('KMS-Schlüssel gehört') !== -1; });
+  assert.strictEqual(lines.length, 1, 'Zuordnungswarnungen: ' + lines.join(' | '));
+  doesNotWarn(text, 'die Zielversion ist 2022');
+});
+
+test('Bis zu drei Tastaturlayouts landen in einem InputLocale-Wert', function () {
+  var one = build({ inputLocale: '0407:00000407' });
+  has(one, '<InputLocale>0407:00000407</InputLocale>');
+
+  var three = build({
+    inputLocale: '0407:00000407',
+    inputLocale2: '0409:00000409',
+    inputLocale3: '040C:0000040C'
+  });
+  has(three, '<InputLocale>0407:00000407;0409:00000409;040C:0000040C</InputLocale>');
+  hasNot(three, ';;');
+  assertWellFormed(three);
+
+  /* Doppelte Layouts werden nicht doppelt geschrieben. */
+  var duplicate = build({ inputLocale: '0407:00000407', inputLocale2: '0407:00000407' });
+  has(duplicate, '<InputLocale>0407:00000407</InputLocale>');
+});
+
+test('Firmware-Schlüssel lässt den ProductKey-Knoten weg', function () {
+  var xml = build({ oemProductKey: true, productKey: 'W269N-WFGWX-YVC9B-4J6C9-T83GX' });
+  hasNot(xml, '<ProductKey>');
+  hasNot(xml, 'W269N-WFGWX-YVC9B-4J6C9-T83GX');
+  assertWellFormed(xml);
+
+  var interactive = build({ oemProductKey: true, editionMode: 'choose', editionValue: '1' });
+  hasNot(interactive, '<ProductKey>');
+  hasNot(interactive, '00000-00000-00000-00000-00000');
+
+  var text = warningText({ oemProductKey: true, productKey: 'X' });
+  warns(text, 'wird deshalb nicht in die Datei geschrieben');
+  doesNotWarn(text, 'fragt das Setup nach dem Schlüssel');
+});
+
+test('Editionsliste wird nach Zielversion gefiltert', function () {
+  var win11 = D.editionsFor('windows11');
+  var win10 = D.editionsFor('windows10');
+
+  assert.ok(win11.some(function (entry) { return entry.image === 'Windows 11 Home'; }));
+  assert.ok(win11.some(function (entry) { return entry.image === 'Windows 11 Pro for Workstations'; }));
+  assert.ok(win10.some(function (entry) { return entry.image === 'Windows 10 Pro'; }));
+  assert.strictEqual(win11.filter(function (entry) { return /^Windows 10 /.test(entry.image); }).length, 0);
+  assert.strictEqual(win10.filter(function (entry) { return /^Windows 11 /.test(entry.image); }).length, 0);
+
+  /* LTSC- und IoT-Vorlagen sind je Zielversion enthalten. */
+  assert.ok(win11.some(function (entry) { return entry.image === 'Windows 11 Enterprise LTSC 2024'; }));
+  assert.ok(win10.some(function (entry) { return entry.image === 'Windows 10 IoT Enterprise LTSC 2021'; }));
+
+  var ids = {};
+  win11.concat(win10).forEach(function (entry) {
+    assert.ok(!ids[entry.id], 'Doppelte Editions-ID: ' + entry.id);
+    ids[entry.id] = true;
+  });
+
+  assert.deepStrictEqual(D.editionsFor('server'), []);
+});
+
+test('Schnellprofile verweisen auf vorhandene Vorlagen', function () {
+  assert.strictEqual(D.quickProfiles.length, 4);
+  D.quickProfiles.forEach(function (profile) {
+    var preset = D.presets.filter(function (item) { return item.id === profile.preset; })[0];
+    assert.ok(preset, 'Vorlage fehlt: ' + profile.preset);
+    assert.ok(profile.label && profile.description, 'Label/Beschreibung fehlt: ' + profile.preset);
+  });
+});
+
+test('Game DVR wird über beide HKCU-Werte abgeschaltet', function () {
+  var xml = build({ disableGameDvr: true, userName: 'u' });
+  has(xml, '/v GameDVR_Enabled /t REG_DWORD /d 0 /f');
+  has(xml, '/v AppCaptureEnabled /t REG_DWORD /d 0 /f');
+  hasNot(build({ disableGameDvr: false }), 'GameDVR_Enabled');
 });
 
 test('Computernamen: Zufall nur als einzelnes *, keine reinen Ziffern', function () {

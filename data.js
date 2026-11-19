@@ -1,10 +1,24 @@
 /*
  * Statische Auswahllisten und Vorlagen für den Unattend-Generator.
  * Klassisches Script (kein Modul), damit die Seite auch per file:// funktioniert.
+ *
+ * Hier stehen nur Daten, keine Logik. Was hier hinzukommt, erscheint direkt
+ * in der Oberfläche:
+ *   - LANGUAGES   weitere Sprache  -> Eintrag mit code, label und inputLocale
+ *   - KEYBOARDS   weiteres Layout  -> Eintrag mit id (Sprache:Layout) und label
+ *   - TIMEZONES   weitere Zone     -> Eintrag mit Windows-Zeitzonen-id und label
+ *   - SERVER_*    weitere Version  -> Eintrag in SERVER_VERSIONS/…EDITIONS
+ *   - CLIENT_EDITIONS             -> Image-Namen je Zielversion, ohne Präfix
+ *   - EDITION_PRESETS             -> Sonder-Images (LTSC/IoT) mit vollem Namen
+ *   - PRESETS                     -> vollständige Beispielkonfigurationen
+ *   - QUICK_PROFILES              -> Kacheln, die auf eine PRESET-id zeigen
+ *
+ * Die Regeln für gültige Werte (und damit die Warnungen) prüft generator.js.
  */
 var UnattendData = (function () {
   'use strict';
 
+  /* code = Sprache für Setup/System, inputLocale = Standardtastatur dazu. */
   var LANGUAGES = [
     { code: 'de-DE', label: 'Deutsch (Deutschland)', inputLocale: '0407:00000407' },
     { code: 'de-AT', label: 'Deutsch (Österreich)', inputLocale: '0C07:00000407' },
@@ -34,6 +48,8 @@ var UnattendData = (function () {
     { code: 'zh-TW', label: '中文 (繁體, 台灣)', inputLocale: '0404:00000404' }
   ];
 
+  /* id ist das Paar "Sprache:Layout" aus der Windows-Registry, z. B.
+     0407:00000407 für Deutsch (QWERTZ). */
   var KEYBOARDS = [
     { id: '0407:00000407', label: 'Deutsch (QWERTZ)' },
     { id: '0409:00000409', label: 'Englisch (US)' },
@@ -57,6 +73,7 @@ var UnattendData = (function () {
     { id: '0409:00010409', label: 'US-Dvorak' }
   ];
 
+  /* id ist der Windows-Name der Zeitzone (nicht der Anzeigename). */
   var TIMEZONES = [
     { id: 'W. Europe Standard Time', label: '(UTC+01:00) Amsterdam, Berlin, Bern, Rom, Stockholm, Wien' },
     { id: 'Central Europe Standard Time', label: '(UTC+01:00) Belgrad, Bratislava, Budapest, Ljubljana, Prag' },
@@ -109,13 +126,39 @@ var UnattendData = (function () {
      exakt dem Image auf dem Medium entsprechen – daher bleibt das Feld
      editierbar und die Auswahl setzt nur einen Vorschlag. */
   var EDITION_PRESETS = [
-    { id: 'ltsc2019', target: 'windows10', image: 'Windows 10 Enterprise LTSC 2019', family: 'ltsc', label: 'Windows 10 Enterprise LTSC 2019' },
-    { id: 'iot2019', target: 'windows10', image: 'Windows 10 IoT Enterprise LTSC 2019', family: 'iot', label: 'Windows 10 IoT Enterprise LTSC 2019' },
-    { id: 'ltsc2021', target: 'windows10', image: 'Windows 10 Enterprise LTSC 2021', family: 'ltsc', label: 'Windows 10 Enterprise LTSC 2021' },
-    { id: 'iot2021', target: 'windows10', image: 'Windows 10 IoT Enterprise LTSC 2021', family: 'iot', label: 'Windows 10 IoT Enterprise LTSC 2021' },
-    { id: 'ltsc2024', target: 'windows11', image: 'Windows 11 Enterprise LTSC 2024', family: 'ltsc', label: 'Windows 11 Enterprise LTSC 2024' },
-    { id: 'iot2024', target: 'windows11', image: 'Windows 11 IoT Enterprise LTSC 2024', family: 'iot', label: 'Windows 11 IoT Enterprise LTSC 2024' }
+    { id: 'ltsc2019', target: 'windows10', image: 'Windows 10 Enterprise LTSC 2019', family: 'ltsc' },
+    { id: 'iot2019', target: 'windows10', image: 'Windows 10 IoT Enterprise LTSC 2019', family: 'iot' },
+    { id: 'ltsc2021', target: 'windows10', image: 'Windows 10 Enterprise LTSC 2021', family: 'ltsc' },
+    { id: 'iot2021', target: 'windows10', image: 'Windows 10 IoT Enterprise LTSC 2021', family: 'iot' },
+    { id: 'ltsc2024', target: 'windows11', image: 'Windows 11 Enterprise LTSC 2024', family: 'ltsc' },
+    { id: 'iot2024', target: 'windows11', image: 'Windows 11 IoT Enterprise LTSC 2024', family: 'iot' }
   ];
+
+  /* Client-Editionen, wie sie im Installationsmedium heißen – je Zielversion.
+     Die Auswahl setzt nur einen Vorschlag; der Image-Name bleibt editierbar. */
+  var CLIENT_EDITIONS = {
+    windows11: ['Home', 'Home N', 'Home Single Language', 'Pro', 'Pro N',
+      'Pro for Workstations', 'Pro Education', 'Education', 'Education N',
+      'Enterprise', 'Enterprise N', 'Enterprise G', 'Enterprise Multi-Session'],
+    windows10: ['Home', 'Home N', 'Home Single Language', 'Home Country Specific',
+      'Pro', 'Pro N', 'Pro for Workstations', 'Pro Education', 'Education',
+      'Education N', 'Enterprise', 'Enterprise N', 'Enterprise G', 'Enterprise Multi-Session']
+  };
+
+  /* Alle auswählbaren Image-Namen einer Zielversion: Standard-Editionen plus
+     die LTSC-/IoT-Vorlagen. */
+  function editionsFor(target) {
+    var prefix = target === 'windows10' ? 'Windows 10 ' : 'Windows 11 ';
+    var standard = (CLIENT_EDITIONS[target] || []).map(function (name) {
+      return {
+        id: target + '-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        target: target,
+        image: prefix + name
+      };
+    });
+    var special = EDITION_PRESETS.filter(function (entry) { return entry.target === target; });
+    return standard.concat(special);
+  }
 
   var SERVER_INSTALL_TYPES = [
     { id: 'desktop', label: 'Desktop Experience (mit GUI)' },
@@ -129,24 +172,41 @@ var UnattendData = (function () {
     return installType === 'desktop' ? name + ' (Desktop Experience)' : name;
   }
 
+  /* Gemeinsame Grundlage der deutschen Windows-11-Beispiele: Sprache,
+     Zeitzone, GPT und die ausgeblendeten OOBE-Seiten. Spart in jeder Vorlage
+     ein Dutzend gleicher Zeilen. */
+  var WIN11_BASE = {
+    target: 'windows11',
+    architecture: 'amd64',
+    uiLanguage: 'de-DE',
+    systemLocale: 'de-DE',
+    userLocale: 'de-DE',
+    inputLocale: '0407:00000407',
+    timezone: 'W. Europe Standard Time',
+    diskMode: 'gpt',
+    userName: 'Benutzer',
+    userGroup: 'Administrators',
+    hideEulaPage: true,
+    hideOnlineAccountScreens: true,
+    hideWirelessSetup: true
+  };
+
+  function withBase(overrides) {
+    var config = {};
+    Object.keys(WIN11_BASE).forEach(function (key) { config[key] = WIN11_BASE[key]; });
+    Object.keys(overrides).forEach(function (key) { config[key] = overrides[key]; });
+    return config;
+  }
+
+  /* Vollständige Beispielkonfigurationen: id (intern), name (Auswahlliste)
+     und config (Teilmenge von DEFAULTS aus generator.js). Fehlende Schlüssel
+     ergänzt die Oberfläche beim Anwenden aus den Vorgaben, deshalb muss hier
+     nur stehen, was von der Vorgabe abweicht. */
   var PRESETS = [
     {
       id: 'win11-de',
       name: 'Windows 11 – Deutsch, Standard-PC',
-      config: {
-        target: 'windows11',
-        architecture: 'amd64',
-        uiLanguage: 'de-DE',
-        systemLocale: 'de-DE',
-        userLocale: 'de-DE',
-        inputLocale: '0407:00000407',
-        timezone: 'W. Europe Standard Time',
-        diskMode: 'gpt',
-        userName: 'Benutzer',
-        userGroup: 'Administrators',
-        hideEulaPage: true,
-        hideOnlineAccountScreens: true,
-        hideWirelessSetup: true,
+      config: withBase({
         bypassTpm: true,
         bypassSecureBoot: true,
         bypassRam: true,
@@ -155,7 +215,7 @@ var UnattendData = (function () {
         disableConsumerFeatures: true,
         removeBloatware: true,
         showFileExtensions: true
-      }
+      })
     },
     {
       id: 'win11-minimal',
@@ -337,7 +397,69 @@ var UnattendData = (function () {
         darkMode: false,
         disableWidgets: false
       }
+    },
+    {
+      id: 'quick-company',
+      name: 'Windows 11 – Unternehmen, schlank',
+      config: withBase({
+        bypassTpm: true,
+        bypassSecureBoot: true,
+        bypassRam: true,
+        bypassCpu: true,
+        bypassMsAccount: true,
+        disableConsumerFeatures: true,
+        disableAppSuggestions: true,
+        removeBloatware: true,
+        disableTelemetry: true,
+        disableCortana: true,
+        disableWebSearch: true,
+        enableRdp: true,
+        showFileExtensions: true
+      })
+    },
+    {
+      id: 'quick-privacy',
+      name: 'Windows 11 – Datenschutz, gehärtet',
+      config: withBase({
+        bypassMsAccount: true,
+        disableConsumerFeatures: true,
+        disableAppSuggestions: true,
+        removeBloatware: true,
+        uninstallOneDrive: true,
+        disableTelemetry: true,
+        disableCortana: true,
+        disableWebSearch: true,
+        disableCopilot: true
+      })
+    },
+    {
+      id: 'quick-gaming',
+      name: 'Windows 11 – Gaming, Leistung',
+      config: withBase({
+        bypassTpm: true,
+        bypassSecureBoot: true,
+        bypassRam: true,
+        bypassCpu: true,
+        bypassMsAccount: true,
+        disableConsumerFeatures: true,
+        removeBloatware: true,
+        disableGameDvr: true,
+        disableWidgets: true,
+        disableCortana: true,
+        disableWebSearch: true,
+        showFileExtensions: true,
+        numLockOn: true
+      })
     }
+  ];
+
+  /* Die vier Schnellprofile der Oberfläche: Verweis auf eine Vorlage plus
+     kurze Beschreibung. */
+  var QUICK_PROFILES = [
+    { preset: 'win11-de', label: 'Standard', description: 'Deutsch, GPT, Windows-11-Bypässe, Apps entfernt – der übliche Heimumbau.' },
+    { preset: 'quick-company', label: 'Unternehmen', description: 'Schlank ohne Consumer-Inhalte; Telemetrie, Cortana und Websuche aus, RDP an.' },
+    { preset: 'quick-privacy', label: 'Datenschutz', description: 'Telemetrie, Werbung, Cortana und OneDrive aus; TPM- und Secure-Boot-Pflicht bleibt.' },
+    { preset: 'quick-gaming', label: 'Gaming', description: 'Bloatware, Widgets und Game DVR aus, Hardware-Bypässe an.' }
   ];
 
   return {
@@ -349,7 +471,8 @@ var UnattendData = (function () {
     serverEditions: SERVER_EDITIONS,
     serverInstallTypes: SERVER_INSTALL_TYPES,
     serverImageName: serverImageName,
-    editionPresets: EDITION_PRESETS
+    editionsFor: editionsFor,
+    quickProfiles: QUICK_PROFILES
   };
 })();
 

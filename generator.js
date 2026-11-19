@@ -4,10 +4,37 @@
  * mit den Pässen windowsPE, specialize und oobeSystem.
  *
  * Läuft im Browser (window.UnattendGenerator) und in Node (module.exports).
+ * Beides über das UMD-Gerüst am Dateiende bzw. direkt unter diesem Kopf.
  *
  * Teile der Optimierungen, Kontorichtlinien und der Skript-Einbettung sind
  * Übersetzungen aus dem C#-Projekt "unattend-generator" von Christoph
  * Schneegans (https://github.com/cschneegans/unattend-generator), MIT-Lizenz.
+ *
+ * Aufbau dieser Datei (in dieser Reihenfolge):
+ *   1. Vorgaben und erlaubte Werte   – DEFAULTS und die *-Listen
+ *   2. XML-Grundgerüst               – esc, n, v, compact, render, component
+ *   3. Hilfsfunktionen               – Registry, PowerShell, Normalisierung
+ *   4. windowsPE                     – Datenträger, Image, Lizenz, Sprache
+ *   5. specialize                    – Computername, Optimierungen, Skripte
+ *   6. oobeSystem                    – Konten, OOBE, Desktop-Anpassungen
+ *   7. Zusammenbau                   – buildUnattend()
+ *   8. Prüfung                       – analyze() inklusive GVLK-Katalog
+ *
+ * Eine neue Option ergänzen:
+ *   1. Schlüssel in DEFAULTS aufnehmen (Boolean, Zahl als String oder Text).
+ *      DEFAULTS ist die einzige Liste der erlaubten Konfigurationsschlüssel.
+ *   2. In normalize() prüfen oder mit Vorgabe füllen. Dort entstehen alle
+ *      endgültigen Werte; der restliche Code darf sich darauf verlassen.
+ *   3. An der passenden Stelle einen Knoten bzw. Befehl anhängen:
+ *      Setup und Image -> windowsPE, System -> specialize,
+ *      Benutzer und Desktop -> oobeSystem.
+ *   4. Feld in index.html anlegen und in app.js zu TEXT_FIELDS oder
+ *      BOOL_FIELDS hinzufügen (siehe Kommentar dort).
+ *   5. Prüfung in tests/run.js ergänzen und `node tests/run.js` laufen lassen.
+ *
+ * XML-Knoten sind entweder Strings (Textinhalt) oder Objekte der Form
+ * { name, attrs, children }: n() baut sie, v() ist die Abkürzung für einen
+ * Textknoten, compact() entfernt leere Einträge, render() schreibt sie.
  */
 (function (root, factory) {
   'use strict';
@@ -23,50 +50,15 @@
   var XSI_NS = 'http://www.w3.org/2001/XMLSchema-instance';
   var PUBLIC_KEY_TOKEN = '31bf3856ad364e35';
 
-  /* Offizielle KMS-Clientschlüssel (GVLK), veröffentlicht von Microsoft:
-     https://learn.microsoft.com/windows-server/get-started/kms-client-activation-keys
-     Sie aktivieren ausschließlich gegen einen KMS-Host im eigenen Netz und
-     sind keine Lizenz – der echte Schlüssel wird später per
-     "slmgr /ipk <Schlüssel>" nachgetragen. */
-  var KMS_KEYS = [
-    { id: 'win-pro', group: 'Windows 11 / 10', label: 'Pro', scope: 'client', key: 'W269N-WFGWX-YVC9B-4J6C9-T83GX' },
-    { id: 'win-pro-n', group: 'Windows 11 / 10', label: 'Pro N', scope: 'client', key: 'MH37W-N47XK-V7XM9-C7227-GCQG9' },
-    { id: 'win-pro-workstations', group: 'Windows 11 / 10', label: 'Pro for Workstations', scope: 'client', key: 'NRG8B-VKK3Q-CXVCJ-9G2XF-6Q84J' },
-    { id: 'win-pro-workstations-n', group: 'Windows 11 / 10', label: 'Pro for Workstations N', scope: 'client', key: '9FNHH-K3HBT-3W4TD-6383H-6XYWF' },
-    { id: 'win-pro-education', group: 'Windows 11 / 10', label: 'Pro Education', scope: 'client', key: '6TP4R-GNPTD-KYYHQ-7B7DP-J447Y' },
-    { id: 'win-pro-education-n', group: 'Windows 11 / 10', label: 'Pro Education N', scope: 'client', key: 'YVWGF-BXNMC-HTQYQ-CPQ99-66QFC' },
-    { id: 'win-education', group: 'Windows 11 / 10', label: 'Education', scope: 'client', key: 'NW6C2-QMPVW-D7KKK-3GKT6-VCFB2' },
-    { id: 'win-education-n', group: 'Windows 11 / 10', label: 'Education N', scope: 'client', key: '2WH4N-8QGBV-H22JP-CT43Q-MDWWJ' },
-    { id: 'win-enterprise', group: 'Windows 11 / 10', label: 'Enterprise', scope: 'client', key: 'NPPR9-FWDCX-D2C8J-H872K-2YT43' },
-    { id: 'win-enterprise-n', group: 'Windows 11 / 10', label: 'Enterprise N', scope: 'client', key: 'DPH2V-TTNVB-4X9Q3-TJR4H-KHJW4' },
-    { id: 'win-enterprise-g', group: 'Windows 11 / 10', label: 'Enterprise G', scope: 'client', key: 'YYVX9-NTFWV-6MDM3-9PT4T-4M68B' },
-    { id: 'win-enterprise-g-n', group: 'Windows 11 / 10', label: 'Enterprise G N', scope: 'client', key: '44RPN-FTY23-9VTTB-MP9BX-T84FV' },
-    { id: 'ltsc-enterprise', group: 'LTSC / IoT Enterprise', label: 'Enterprise LTSC (2019, 2021, 2024)', scope: 'client', key: 'M7XTQ-FN8P6-TTKYV-9D4CC-J462D' },
-    { id: 'ltsc-enterprise-n', group: 'LTSC / IoT Enterprise', label: 'Enterprise N LTSC (2019, 2021, 2024)', scope: 'client', key: '92NFX-8DJQP-P6BBQ-THF9C-7CG2H' },
-    { id: 'iot-enterprise-ltsc', group: 'LTSC / IoT Enterprise', label: 'IoT Enterprise LTSC (2021, 2024)', scope: 'client', key: 'KBN8V-HFGQ4-MGXVD-347P6-PDQGT' },
-    { id: 'server2025-standard', group: 'Windows Server 2025', label: 'Standard', scope: 'server', version: '2025', edition: 'Standard', key: 'TVRH6-WHNXV-R9WG3-9XRFY-MY832' },
-    { id: 'server2025-datacenter', group: 'Windows Server 2025', label: 'Datacenter', scope: 'server', version: '2025', edition: 'Datacenter', key: 'D764K-2NDRG-47T6Q-P8T8W-YP6DF' },
-    { id: 'server2025-azure', group: 'Windows Server 2025', label: 'Datacenter: Azure Edition', scope: 'server', version: '2025', edition: 'Datacenter: Azure Edition', key: 'XGN3F-F394H-FD2MY-PP6FD-8MCRC' },
-    { id: 'server2022-standard', group: 'Windows Server 2022', label: 'Standard', scope: 'server', version: '2022', edition: 'Standard', key: 'VDYBN-27WPP-V4HQT-9VMD4-VMK7H' },
-    { id: 'server2022-datacenter', group: 'Windows Server 2022', label: 'Datacenter', scope: 'server', version: '2022', edition: 'Datacenter', key: 'WX4NM-KYWYW-QJJR4-XV3QB-6VM33' },
-    { id: 'server2022-azure', group: 'Windows Server 2022', label: 'Datacenter: Azure Edition', scope: 'server', version: '2022', edition: 'Datacenter: Azure Edition', key: 'NTBV8-9K7Q8-V27C6-M2BTV-KHMXV' },
-    { id: 'server2019-standard', group: 'Windows Server 2019', label: 'Standard', scope: 'server', version: '2019', edition: 'Standard', key: 'N69G4-B89J2-4G8F4-WWYCC-J464C' },
-    { id: 'server2019-datacenter', group: 'Windows Server 2019', label: 'Datacenter', scope: 'server', version: '2019', edition: 'Datacenter', key: 'WMDGN-G9PQG-XVVXX-R3X43-63DFG' },
-    { id: 'server2019-essentials', group: 'Windows Server 2019', label: 'Essentials', scope: 'server', version: '2019', edition: 'Essentials', key: 'WVDHN-86M7X-466P6-VHXV7-YY726' },
-    { id: 'server2016-standard', group: 'Windows Server 2016', label: 'Standard', scope: 'server', version: '2016', edition: 'Standard', key: 'WC2BQ-8NRM3-FDDYY-2BFGV-KHKQY' },
-    { id: 'server2016-datacenter', group: 'Windows Server 2016', label: 'Datacenter', scope: 'server', version: '2016', edition: 'Datacenter', key: 'CB7KF-BWN84-R7R2Y-793K2-8XDDG' },
-    { id: 'server2016-essentials', group: 'Windows Server 2016', label: 'Essentials', scope: 'server', version: '2016', edition: 'Essentials', key: 'JCKRF-N37P4-C2D82-9YXRT-4M63B' }
-  ];
-
-  /* Sucht einen Katalogschlüssel, unabhängig von Schreibweise und Leerzeichen. */
-  function findKmsKey(key) {
-    var value = String(key === undefined || key === null ? '' : key).trim().toUpperCase();
-    if (!value) return null;
-    for (var i = 0; i < KMS_KEYS.length; i++) {
-      if (KMS_KEYS[i].key === value) return KMS_KEYS[i];
-    }
-    return null;
-  }
+  /* ------------------------------------------------------------------ *
+   * Vorgaben und erlaubte Werte
+   *
+   * DEFAULTS enthält jeden Konfigurationsschlüssel genau einmal. Wer hier
+   * einen Schlüssel ergänzt, bekommt ihn über defaults() und normalize()
+   * automatisch in jedes Konfigurationsobjekt. Die Listen darunter sind die
+   * Werte, die normalize() durchlässt – alles andere fällt auf die Vorgabe
+   * zurück, damit eine beschädigte JSON-Datei nichts kaputt macht.
+   * ------------------------------------------------------------------ */
 
   var DEFAULTS = {
     target: 'windows11',
@@ -77,6 +69,7 @@
     editionMode: 'index',
     editionValue: '1',
     productKey: '',
+    oemProductKey: false,
     computerName: '',
     owner: '',
     organization: '',
@@ -84,6 +77,8 @@
     systemLocale: 'de-DE',
     userLocale: 'de-DE',
     inputLocale: '0407:00000407',
+    inputLocale2: '',
+    inputLocale3: '',
     timezone: 'W. Europe Standard Time',
     acceptEula: true,
     enableFirewall: true,
@@ -166,6 +161,11 @@
 
   /* ------------------------------------------------------------------ *
    * XML-Grundgerüst
+   *
+   * Ein Knoten ist entweder ein String (Textinhalt) oder
+   * { name, attrs, children }. Attribute werden nur geschrieben, wenn sie
+   * gesetzt sind; Knoten mit reinem Textinhalt bleiben in einer Zeile, damit
+   * Windows Setup exakte Werte ohne zusätzlichen Leerraum erhält.
    * ------------------------------------------------------------------ */
 
   function esc(value) {
@@ -177,15 +177,20 @@
       .replace(/'/g, '&apos;');
   }
 
+  /* Baut einen Elementknoten. attrs darf null sein, children ist eine Liste
+     aus Strings und/oder weiteren Knoten. */
   function n(name, attrs, children) {
     return { name: name, attrs: attrs || null, children: children || [] };
   }
 
+  /* Abkürzung für einen Textknoten. undefined/null bedeuten "kein Knoten",
+     damit sich optionale Elemente direkt in compact([...]) schreiben lassen. */
   function v(name, value) {
     if (value === undefined || value === null) return null;
     return n(name, null, [String(value)]);
   }
 
+  /* Entfernt null, undefined und false aus einer Knotenliste. */
   function compact(list) {
     return list.filter(function (item) {
       return item !== null && item !== undefined && item !== false;
@@ -224,6 +229,8 @@
     return pad + '<' + node.name + attrs + '>\r\n' + inner + '\r\n' + pad + '</' + node.name + '>';
   }
 
+  /* Rahmen eines <component>-Elements: Namespace, publicKeyToken und
+     Architektur sind bei jeder Komponente gleich und deshalb hier gebündelt. */
   function component(name, architecture, children) {
     return n('component', {
       name: name,
@@ -258,6 +265,8 @@
 
   /* REG_SZ-Werte werden immer gequotet: sonst zerlegt cmd Werte mit Leerzeichen
      und der Aufrufer müsste die Anführungszeichen selbst mitliefern. */
+  /* Registry-Werte für reg add. REG_SZ wird immer gequotet, weil Werte wie
+     "Off" oder eine Zahl sonst als falscher Typ ankommen. */
   function regValue(type, value) {
     var text = String(value);
     return type === 'REG_SZ' ? '"' + text + '"' : text;
@@ -269,6 +278,7 @@
   }
 
   /* Setzt den Standardwert eines Schlüssels (/ve). */
+  /* Setzt die Standardeinstellung eines Schlüssels (/ve). */
   function regSetDefault(key, type, value) {
     if (type === undefined) return 'reg add "' + key + '" /ve /f';
     return 'reg add "' + key + '" /ve /t ' + type + ' /d ' + value + ' /f';
@@ -318,6 +328,12 @@
     return cfg.target === 'server';
   }
 
+  /* Der Schlüssel, der wirklich in die Datei geht: Mit „Schlüssel aus der
+     Firmware“ (OEM) schreibt der Generator bewusst keinen. */
+  function effectiveProductKey(cfg) {
+    return cfg.oemProductKey ? '' : cfg.productKey;
+  }
+
   function lines(value) {
     return String(value === undefined || value === null ? '' : value)
       .split(/\r?\n/)
@@ -325,6 +341,10 @@
       .filter(function (line) { return line !== '' && line.charAt(0) !== '#'; });
   }
 
+  /* Einzige Stelle, an der Konfigurationswerte geprüft und vervollständigt
+     werden: unbekannte Auswahlwerte fallen auf die Vorgabe zurück, Zahlen
+     werden als String geführt und leere Texte bleiben leer (nicht "null").
+     Wer eine neue Option ergänzt, trägt sie in DEFAULTS und hier ein. */
   function normalize(input) {
     var cfg = {};
     var key;
@@ -372,6 +392,8 @@
     cfg.systemLocale = str(cfg.systemLocale, cfg.uiLanguage);
     cfg.userLocale = str(cfg.userLocale, cfg.uiLanguage);
     cfg.inputLocale = str(cfg.inputLocale, '0409:00000409');
+    cfg.inputLocale2 = str(cfg.inputLocale2);
+    cfg.inputLocale3 = str(cfg.inputLocale3);
     cfg.nicName = str(cfg.nicName, 'Ethernet');
 
     cfg.userName = str(cfg.userName);
@@ -392,9 +414,19 @@
    * windowsPE
    * ------------------------------------------------------------------ */
 
+  /* Mehrere Tastaturlayouts werden mit Semikolon getrennt; das erste ist das
+     Standardlayout (siehe Microsoft-Windows-International-Core, InputLocale). */
+  function inputLocales(cfg) {
+    var list = [];
+    [cfg.inputLocale, cfg.inputLocale2, cfg.inputLocale3].forEach(function (value) {
+      if (value && list.indexOf(value) === -1) list.push(value);
+    });
+    return list.join(';');
+  }
+
   function internationalCore(name, cfg, withSetupUi) {
     var children = [
-      v('InputLocale', cfg.inputLocale),
+      v('InputLocale', inputLocales(cfg)),
       v('SystemLocale', cfg.systemLocale),
       v('UILanguage', cfg.uiLanguage),
       v('UserLocale', cfg.userLocale)
@@ -540,15 +572,17 @@
     var children = [v('AcceptEula', 'true')];
     if (cfg.owner) children.push(v('FullName', cfg.owner));
     if (cfg.organization) children.push(v('Organization', cfg.organization));
-    if (cfg.productKey) {
+    var key = effectiveProductKey(cfg);
+    if (key) {
       children.push(n('ProductKey', null, [
-        v('Key', cfg.productKey),
+        v('Key', key),
         v('WillShowUI', 'OnError')
       ]));
-    } else if (cfg.editionMode === 'choose') {
+    } else if (cfg.editionMode === 'choose' && !cfg.oemProductKey) {
       /* Interaktive Schlüssel-/Editionswahl braucht einen Platzhalter und
          WillShowUI=Always – ohne den Knoten überspringt Setup die Seite
-         (im C#-Original als Issue #415 behoben). */
+         (im C#-Original als Issue #415 behoben). Mit Firmware-Schlüssel
+         bleibt der Knoten bewusst ganz weg. */
       children.push(n('ProductKey', null, [
         v('Key', '00000-00000-00000-00000-00000'),
         v('WillShowUI', 'Always')
@@ -610,9 +644,10 @@
   function shellSetupSpecialize(cfg) {
     var children = [];
     if (cfg.computerName) children.push(v('ComputerName', cfg.computerName));
-    if (cfg.productKey) {
+    var key = effectiveProductKey(cfg);
+    if (key) {
       children.push(n('ProductKey', null, [
-        v('Key', cfg.productKey),
+        v('Key', key),
         v('WillShowUI', 'Never')
       ]));
     }
@@ -628,6 +663,8 @@
    * C#-Generators von Christoph Schneegans (MIT-Lizenz).
    * ------------------------------------------------------------------ */
 
+  /* Systemweite Optimierungen (HKLM, Dienste, netsh). Läuft im
+     specialize-Pass als SYSTEM, also vor der ersten Anmeldung. */
   function systemOptimizations(cfg) {
     var commands = [];
     var client = !isServer(cfg);
@@ -697,6 +734,9 @@
 
   /* Läuft ausschließlich über firstLogonCommandList und damit nur bei
      Client-Installationen – Serverprüfungen wären hier toter Code. */
+  /* Benutzerbezogene Optimierungen (HKCU). Sie laufen als
+     FirstLogonCommand im Kontext des ersten Benutzers – systemweit wären
+     sie wirkungslos, weil HKCU dann noch nicht existiert. */
   function userOptimizations(cfg) {
     var commands = [];
 
@@ -711,6 +751,10 @@
       commands.push(regSetDefault('HKCU\\Software\\Microsoft\\Edge\\SmartScreenPuaEnabled', 'REG_DWORD', 0));
       reg('HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\AppHost', 'EnableWebContentEvaluation', 'REG_DWORD', 0);
       reg('HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\AppHost', 'PreventOverride', 'REG_DWORD', 0);
+    }
+    if (cfg.disableGameDvr) {
+      reg('HKCU\\System\\GameConfigStore', 'GameDVR_Enabled', 'REG_DWORD', 0);
+      reg('HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR', 'AppCaptureEnabled', 'REG_DWORD', 0);
     }
     if (cfg.classicContextMenu) {
       commands.push(regSetDefault('HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32'));
@@ -744,6 +788,9 @@
     return commands;
   }
 
+  /* Alle Befehle des specialize-Passes in fester Reihenfolge: erst
+     Setup-Anpassungen und Richtlinien, dann Netzwerk, zuletzt
+     systemOptimizations(). */
   function specializeCommandList(cfg) {
     var commands = [];
 
@@ -908,6 +955,10 @@
    * Zusammenbau
    * ------------------------------------------------------------------ */
 
+  /* Baut die vollständige Datei. Die Reihenfolge der Pässe ist fest:
+     windowsPE (Setup-Umgebung), specialize (System nach dem Neustart),
+     oobeSystem (erste Anmeldung). Neue Komponenten gehören in den Pass,
+     in dem die Einstellung wirkt – nicht in den, der am bequemsten ist. */
   function buildUnattend(input) {
     var cfg = normalize(input);
 
@@ -954,6 +1005,51 @@
       cfg.classicContextMenu || cfg.leftTaskbar || cfg.hideTaskViewButton || cfg.disableSystemRestore;
   }
 
+  /* Offizielle KMS-Clientschlüssel (GVLK), veröffentlicht von Microsoft:
+     https://learn.microsoft.com/windows-server/get-started/kms-client-activation-keys
+     Sie aktivieren ausschließlich gegen einen KMS-Host im eigenen Netz und
+     sind keine Lizenz – der echte Schlüssel wird später per
+     "slmgr /ipk <Schlüssel>" nachgetragen. */
+  var KMS_KEYS = [
+    { id: 'win-pro', group: 'Windows 11 / 10', label: 'Pro', scope: 'client', key: 'W269N-WFGWX-YVC9B-4J6C9-T83GX' },
+    { id: 'win-pro-n', group: 'Windows 11 / 10', label: 'Pro N', scope: 'client', key: 'MH37W-N47XK-V7XM9-C7227-GCQG9' },
+    { id: 'win-pro-workstations', group: 'Windows 11 / 10', label: 'Pro for Workstations', scope: 'client', key: 'NRG8B-VKK3Q-CXVCJ-9G2XF-6Q84J' },
+    { id: 'win-pro-workstations-n', group: 'Windows 11 / 10', label: 'Pro for Workstations N', scope: 'client', key: '9FNHH-K3HBT-3W4TD-6383H-6XYWF' },
+    { id: 'win-pro-education', group: 'Windows 11 / 10', label: 'Pro Education', scope: 'client', key: '6TP4R-GNPTD-KYYHQ-7B7DP-J447Y' },
+    { id: 'win-pro-education-n', group: 'Windows 11 / 10', label: 'Pro Education N', scope: 'client', key: 'YVWGF-BXNMC-HTQYQ-CPQ99-66QFC' },
+    { id: 'win-education', group: 'Windows 11 / 10', label: 'Education', scope: 'client', key: 'NW6C2-QMPVW-D7KKK-3GKT6-VCFB2' },
+    { id: 'win-education-n', group: 'Windows 11 / 10', label: 'Education N', scope: 'client', key: '2WH4N-8QGBV-H22JP-CT43Q-MDWWJ' },
+    { id: 'win-enterprise', group: 'Windows 11 / 10', label: 'Enterprise', scope: 'client', key: 'NPPR9-FWDCX-D2C8J-H872K-2YT43' },
+    { id: 'win-enterprise-n', group: 'Windows 11 / 10', label: 'Enterprise N', scope: 'client', key: 'DPH2V-TTNVB-4X9Q3-TJR4H-KHJW4' },
+    { id: 'win-enterprise-g', group: 'Windows 11 / 10', label: 'Enterprise G', scope: 'client', key: 'YYVX9-NTFWV-6MDM3-9PT4T-4M68B' },
+    { id: 'win-enterprise-g-n', group: 'Windows 11 / 10', label: 'Enterprise G N', scope: 'client', key: '44RPN-FTY23-9VTTB-MP9BX-T84FV' },
+    { id: 'ltsc-enterprise', group: 'LTSC / IoT Enterprise', label: 'Enterprise LTSC (2019, 2021, 2024)', scope: 'client', key: 'M7XTQ-FN8P6-TTKYV-9D4CC-J462D' },
+    { id: 'ltsc-enterprise-n', group: 'LTSC / IoT Enterprise', label: 'Enterprise N LTSC (2019, 2021, 2024)', scope: 'client', key: '92NFX-8DJQP-P6BBQ-THF9C-7CG2H' },
+    { id: 'iot-enterprise-ltsc', group: 'LTSC / IoT Enterprise', label: 'IoT Enterprise LTSC (2021, 2024)', scope: 'client', key: 'KBN8V-HFGQ4-MGXVD-347P6-PDQGT' },
+    { id: 'server2025-standard', group: 'Windows Server 2025', label: 'Standard', scope: 'server', version: '2025', edition: 'Standard', key: 'TVRH6-WHNXV-R9WG3-9XRFY-MY832' },
+    { id: 'server2025-datacenter', group: 'Windows Server 2025', label: 'Datacenter', scope: 'server', version: '2025', edition: 'Datacenter', key: 'D764K-2NDRG-47T6Q-P8T8W-YP6DF' },
+    { id: 'server2025-azure', group: 'Windows Server 2025', label: 'Datacenter: Azure Edition', scope: 'server', version: '2025', edition: 'Datacenter: Azure Edition', key: 'XGN3F-F394H-FD2MY-PP6FD-8MCRC' },
+    { id: 'server2022-standard', group: 'Windows Server 2022', label: 'Standard', scope: 'server', version: '2022', edition: 'Standard', key: 'VDYBN-27WPP-V4HQT-9VMD4-VMK7H' },
+    { id: 'server2022-datacenter', group: 'Windows Server 2022', label: 'Datacenter', scope: 'server', version: '2022', edition: 'Datacenter', key: 'WX4NM-KYWYW-QJJR4-XV3QB-6VM33' },
+    { id: 'server2022-azure', group: 'Windows Server 2022', label: 'Datacenter: Azure Edition', scope: 'server', version: '2022', edition: 'Datacenter: Azure Edition', key: 'NTBV8-9K7Q8-V27C6-M2BTV-KHMXV' },
+    { id: 'server2019-standard', group: 'Windows Server 2019', label: 'Standard', scope: 'server', version: '2019', edition: 'Standard', key: 'N69G4-B89J2-4G8F4-WWYCC-J464C' },
+    { id: 'server2019-datacenter', group: 'Windows Server 2019', label: 'Datacenter', scope: 'server', version: '2019', edition: 'Datacenter', key: 'WMDGN-G9PQG-XVVXX-R3X43-63DFG' },
+    { id: 'server2019-essentials', group: 'Windows Server 2019', label: 'Essentials', scope: 'server', version: '2019', edition: 'Essentials', key: 'WVDHN-86M7X-466P6-VHXV7-YY726' },
+    { id: 'server2016-standard', group: 'Windows Server 2016', label: 'Standard', scope: 'server', version: '2016', edition: 'Standard', key: 'WC2BQ-8NRM3-FDDYY-2BFGV-KHKQY' },
+    { id: 'server2016-datacenter', group: 'Windows Server 2016', label: 'Datacenter', scope: 'server', version: '2016', edition: 'Datacenter', key: 'CB7KF-BWN84-R7R2Y-793K2-8XDDG' },
+    { id: 'server2016-essentials', group: 'Windows Server 2016', label: 'Essentials', scope: 'server', version: '2016', edition: 'Essentials', key: 'JCKRF-N37P4-C2D82-9YXRT-4M63B' }
+  ];
+
+  /* Sucht einen Katalogschlüssel, unabhängig von Schreibweise und Leerzeichen. */
+  function findKmsKey(key) {
+    var value = String(key === undefined || key === null ? '' : key).trim().toUpperCase();
+    if (!value) return null;
+    for (var i = 0; i < KMS_KEYS.length; i++) {
+      if (KMS_KEYS[i].key === value) return KMS_KEYS[i];
+    }
+    return null;
+  }
+
   /* Welche Editionsfamilie steckt im Image-Namen? Die Familie entscheidet
      über Prüfungen und darüber, ob Client-Optionen überhaupt greifen. */
   function editionFamily(editionValue) {
@@ -967,6 +1063,10 @@
     return 'unknown';
   }
 
+  /* Sammelt Hinweise zu widersprüchlichen oder wirkungslosen Einstellungen.
+     Die Funktion ändert nichts und wirft nicht: Sie liefert nur eine Liste
+     von Texten für die Oberfläche, die XML-Ausgabe entsteht unabhängig
+     davon in buildUnattend(). */
   function analyze(input) {
     var cfg = normalize(input);
     var warnings = [];
@@ -1029,7 +1129,7 @@
         warnings.push('„' + cfg.userName + '“ ist ein reservierter Kontoname (u. a. Administrator, Guest, DefaultAccount, WDAGUtilityAccount) und kann nicht angelegt werden.');
       }
     }
-    if (cfg.productKey === '') {
+    if (cfg.productKey === '' && !cfg.oemProductKey) {
       if (cfg.editionMode === 'choose') {
         warnings.push('Interaktive Edition: Das Setup bekommt den Platzhalter-Schlüssel 00000-00000-00000-00000-00000 und zeigt die Schlüssel- und Editionsseite. Bei Multi-Edition-Images erscheint trotzdem manchmal nur eine Edition – dann hilft eine eigene sources\\ei.cfg neben dem boot.wim.');
       } else {
@@ -1042,19 +1142,31 @@
       var kmsName = kms.scope === 'server'
         ? 'Windows Server ' + kms.version + ' ' + kms.edition
         : kms.label;
-      warnings.push('„' + kms.key + '“ ist der offizielle KMS-Clientschlüssel (GVLK) für ' + kmsName +
-        ': Er aktiviert nur gegen einen KMS-Host im eigenen Netz und ist keine Lizenz. Den echten Schlüssel später mit „slmgr /ipk“ nachtragen – ohne KMS-Host bleibt Windows nicht aktiviert.');
+      warnings.push('Dies ist ein KMS-Clientschlüssel (GVLK) für ' + kmsName +
+        ': Er aktiviert nur gegen einen KMS-Host im eigenen Netz, nicht als Lizenz. Den echten Schlüssel später mit „slmgr /ipk“ nachtragen.');
+
+      /* Nur die Zuordnung melden, die tatsächlich zutrifft: erst Client/Server,
+         dann – nur bei Server-Ziel – Version und Edition. */
       if (kms.scope === 'server' && !isServer(cfg)) {
         warnings.push('Der KMS-Schlüssel gehört zu ' + kmsName + ', die Zielversion ist aber ein Client-Betriebssystem.');
-      }
-      if (kms.scope === 'client' && isServer(cfg)) {
+      } else if (kms.scope === 'client' && isServer(cfg)) {
         warnings.push('Der KMS-Schlüssel gehört zu einer Client-Edition, die Zielversion ist aber Windows Server.');
+      } else if (kms.scope === 'server') {
+        if (kms.version !== cfg.serverVersion) {
+          warnings.push('Der KMS-Schlüssel gehört zu Windows Server ' + kms.version + ', die Zielversion ist ' + cfg.serverVersion + '.');
+        }
+        if (kms.edition !== cfg.serverEdition) {
+          warnings.push('Der KMS-Schlüssel gehört zu ' + kms.edition + ', die Server-Edition ist ' + cfg.serverEdition + '.');
+        }
       }
-      if (kms.scope === 'server' && kms.version !== cfg.serverVersion) {
-        warnings.push('Der KMS-Schlüssel gehört zu Windows Server ' + kms.version + ', die Zielversion ist ' + cfg.serverVersion + '.');
+    }
+
+    if (cfg.oemProductKey) {
+      if (cfg.productKey) {
+        warnings.push('„Schlüssel aus der Firmware“ ist aktiv – der eingetragene Produktschlüssel wird deshalb nicht in die Datei geschrieben.');
       }
-      if (kms.scope === 'server' && kms.edition !== cfg.serverEdition) {
-        warnings.push('Der KMS-Schlüssel gehört zu ' + kms.edition + ', die Server-Edition ist ' + cfg.serverEdition + '.');
+      if (cfg.editionMode === 'choose') {
+        warnings.push('Ohne <ProductKey> erscheint die Schlüssel-/Editionsseite nur, wenn im BIOS kein Schlüssel hinterlegt ist. Sonst entscheidet der Firmware-Schlüssel über die Edition.');
       }
     }
 
@@ -1130,6 +1242,7 @@
     buildUnattend: buildUnattend,
     analyze: analyze,
     kmsKeys: KMS_KEYS,
+    kmsKeyFor: findKmsKey,
     escape: esc
   };
 });

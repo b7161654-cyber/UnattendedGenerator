@@ -4,15 +4,16 @@ Erzeugt eine `autounattend.xml` für die unbeaufsichtigte Installation von Windo
 
 ## Funktionsumfang
 
-- Zielversion: Windows 11, Windows 10 oder Windows Server 2016–2025 mit Edition (Standard, Datacenter, Datacenter: Azure Edition) und Installationsvariante (Server Core oder Desktop Experience); Architektur x64, x86 oder ARM64; Edition per Index, Name oder interaktiv
+- Zielversion: Windows 11, Windows 10 oder Windows Server 2016–2025 mit Edition (Standard, Datacenter, Datacenter: Azure Edition) und Installationsvariante (Server Core oder Desktop Experience); Architektur x64, x86 oder ARM64; Edition per gefilterter Liste, Index, Name oder interaktiv
+- Vier Schnellprofile (Standard, Unternehmen, Datenschutz, Gaming), die eine komplette Grundkonfiguration in einem Klick setzen
 - Eigene Vorlagen für Windows 10 Enterprise/IoT Enterprise LTSC 2019 und 2021 sowie Windows 11 Enterprise/IoT Enterprise LTSC 2024, inklusive der passenden Image-Namen und editionsabhängiger Prüfungen (Details unter „LTSC, IoT Enterprise und Azure Edition“)
-- Sprache, Tastaturlayout, Zeitzone für Setup und installiertes System
+- Sprache, Zeitzone und bis zu drei Tastaturlayouts (das erste ist das Standardlayout) für Setup und installiertes System
 - Datenträger: GPT/UEFI oder MBR/BIOS neu anlegen, auf vorhandene Partition oder auf die erste freie Partition installieren
 - Lokale Konten, Administratorkennwort, automatische Anmeldung, OOBE-Seiten ausblenden
-- Produktschlüssel: eigener Schlüssel oder Auswahl aus den offiziellen KMS-Clientschlüsseln (GVLK) für Windows 11/10, LTSC/IoT Enterprise und Server 2016–2025 (Details unter „Volumenlizenz-Schlüssel (KMS)“)
+- Produktschlüssel: eigener Schlüssel, Auswahl aus den offiziellen KMS-Clientschlüsseln (GVLK, Details unter „Volumenlizenz-Schlüssel (KMS)“) oder Schlüssel aus BIOS/UEFI (OEM), bei dem bewusst kein Schlüssel in der Datei steht
 - Windows-11-Bypässe (TPM, Secure Boot, RAM, CPU, Microsoft-Konto)
 - Registry-Eingriffe zu Telemetrie, Cortana, Websuche, Copilot, RDP, UAC, Schnellstart, OneDrive und vorinstallierten Apps
-- Weitere Optimierungen: SmartScreen, Smart App Control, lange Pfade, Update-Neustart, BitLocker-Geräteverschlüsselung, Edge (Erstlauf, Startup-Boost, Desktop-Verknüpfung), Taskleiste, App-Vorschläge, Systemwiederherstellung, klassisches Kontextmenü
+- Weitere Optimierungen: SmartScreen, Smart App Control, Game DVR, lange Pfade, Update-Neustart, BitLocker-Geräteverschlüsselung, Edge (Erstlauf, Startup-Boost, Desktop-Verknüpfung), Taskleiste, App-Vorschläge, Systemwiederherstellung, klassisches Kontextmenü
 - Kontorichtlinien: Kennwortablauf und Kontosperrung über `net accounts`
 - Statische IPv4-Konfiguration, eigene Befehle pro Pass und mehrzeilige PowerShell-Skripte, die als base64 an `-EncodedCommand` gehen
 - Vorlagen, Export/Import der Konfiguration als JSON, automatisches Speichern im Browser
@@ -57,7 +58,7 @@ WSIM prüft die Datei gegen das Schema und die tatsächlich vorhandenen Komponen
 
 ## LTSC, IoT Enterprise und Azure Edition
 
-Diese Editionen heißen im Medium anders als die „normalen“ Images, deshalb gibt es dafür je einen Eintrag unter „Edition-Vorlage (LTSC / IoT)“:
+Diese Editionen heißen im Medium anders als die „normalen“ Images, deshalb gibt es dafür je einen Eintrag unter „Edition (gefiltert nach Zielversion)“:
 
 | Vorlage | Image-Name für `/IMAGE/NAME` |
 |---|---|
@@ -86,6 +87,30 @@ Diese Schlüssel sind **keine Lizenzen**: Sie schalten nur die Aktivierung gegen
 
 Der Generator prüft die Zuordnung und meldet zum Beispiel einen Server-2022-Schlüssel bei Zielversion 2025, einen Client-Schlüssel auf einer Server-Installation oder eine abweichende Server-Edition. Quelle der Schlüssel: Microsoft Learn, [KMS client activation and product keys](https://learn.microsoft.com/windows-server/get-started/kms-client-activation-keys).
 
+## Weiterentwickeln
+
+Jede Datei beginnt mit einem Kopfkommentar, der ihren Aufbau beschreibt. Kurzfassung:
+
+| Datei | Aufgabe |
+|---|---|
+| `generator.js` | Werte prüfen, XML bauen, warnen – reine Logik ohne DOM |
+| `data.js` | Auswahllisten und Vorlagen (nur Daten) |
+| `app.js` | Formular, Vorschau, Speichern/Laden |
+| `index.html`, `styles.css` | Aufbau und Darstellung |
+| `tests/run.js` | Prüfungen ohne externe Abhängigkeiten |
+
+**Eine neue Option in fünf Schritten**
+
+1. Schlüssel in `DEFAULTS` (`generator.js`) aufnehmen – das ist die Liste der erlaubten Konfigurationsschlüssel.
+2. In `normalize()` prüfen und mit Vorgabe füllen; dort entstehen alle endgültigen Werte.
+3. XML im richtigen Pass erzeugen: Setup und Image in `windowsPE`, System in `specialize`, Benutzer und Desktop in `oobeSystem`. Registry-Werte nur über `regAdd()`/`regSetDefault()` schreiben, nicht als handgeschriebene Zeile.
+4. Bedienelement in `index.html` anlegen und seine `id` in `app.js` zu `TEXT_FIELDS` oder `BOOL_FIELDS` hinzufügen; abhängige Felder in `syncFieldStates()` sperren.
+5. Test in `tests/run.js` ergänzen, `node tests/run.js` ausführen, README nachziehen.
+
+**Eine Auswahlliste erweitern:** Ein Eintrag in `data.js` genügt (Sprachen, Tastaturen, Zeitzonen, Server-Versionen, Client-Editionen). Sonder-Images gehören in `EDITION_PRESETS`, vollständige Beispiele in `PRESETS`, die Kacheln oben in `QUICK_PROFILES`.
+
+Alle Dateien müssen weiterhin ohne Build und ohne Abhängigkeiten auskommen: klassische `<script>`-Tags, `var` und Funktionen statt Module, keine externen Bibliotheken. Die Prüfungen laufen mit `node tests/run.js`, ohne dass etwas installiert werden muss.
+
 ## Projektdateien
 
 | Datei | Inhalt |
@@ -112,6 +137,8 @@ Die XML-Struktur ist gegen das bekannte Unattend-Schema gebaut und automatisiert
 Wer die Edition interaktiv wählen lässt („Setup fragen lassen“), bekommt einen Platzhalter-Schlüssel mit `WillShowUI=Always` in die Datei, damit die Schlüssel- und Editionsseite überhaupt erscheint. Bei Multi-Edition-Images zeigt Setup trotzdem manchmal nur eine Edition; dann hilft eine eigene `sources\ei.cfg` neben dem `boot.wim` (nicht die im `boot.wim`), die der Generator nicht erzeugen kann.
 
 **Teststand interaktive Edition:** Gegen den Referenzgenerator geprüft – der erzeugte `<ProductKey>`-Block ist elementweise identisch mit dessen Ausgabe (Platzhalter `00000-00000-00000-00000-00000` plus `WillShowUI=Always`), und in jeder der vier Betriebsarten enthält der Block einen `<Key>` (Testfall). Ein echter Setup-Lauf auf einem Multi-Edition-Image war hier **nicht möglich**: die Umgebung hat kein qemu, 3 GB RAM (Windows 11 verlangt 4 GB) und 9 GB freien Plattenplatz (ISO plus Systemdatenträger brauchen zusammen über 25 GB). Ob die Editionsliste bei mehreren Editionen vollständig erscheint und die Auswahl nach „Weiter“ erhalten bleibt, ist damit **nicht bestätigt** – das bitte einmal von Hand prüfen.
+
+Bewusst nicht enthalten sind der Umbau zu einer bootfähigen ISO und der Import bestehender `autounattend.xml`-Dateien: Für beides müsste der Generator Bootsektoren schreiben bzw. fremde XML-Strukturen zurückrechnen, was ohne Bibliotheken unzuverlässig wäre. Import und Export der eigenen Konfiguration laufen deshalb als JSON.
 
 Kennwortablauf und Kontosperrung werden per `net accounts` gesetzt. Ist der Rechner Mitglied einer Domäne, hat deren Gruppenrichtlinie Vorrang – der Wert gilt dann nicht mehr.
 

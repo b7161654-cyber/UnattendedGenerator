@@ -345,6 +345,50 @@ footer {
   z-index: 50;
 }
 
+/* ---------------------------------------------------------------- Sprungmarken, Schnellprofile */
+
+html { scroll-behavior: smooth; }
+
+.sectionnav { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.sectionnav a {
+  display: inline-block;
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-soft);
+  color: #b9c8da;
+  font-size: 12px;
+  text-decoration: none;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.sectionnav a:hover { border-color: #3a4757; background: #26303d; color: var(--text); }
+
+.card[id] { scroll-margin-top: 96px; }
+
+.quick { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+
+.quick button {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg-soft);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.quick button:hover { border-color: rgba(77, 163, 255, 0.55); background: rgba(77, 163, 255, 0.07); }
+.quick button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.quick button strong { font-size: 13px; }
+.quick button span { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+
 /* ---------------------------------------------------------------- responsive */
 
 @media (max-width: 1100px) {

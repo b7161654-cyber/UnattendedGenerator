@@ -1,6 +1,20 @@
 /*
  * Oberfläche des Unattend-Generators.
  * Klassisches Script ohne Module, damit die Seite direkt per file:// läuft.
+ *
+ * Ablauf: buildSelects() füllt die Auswahllisten, bind() verdrahtet die
+ * Ereignisse, dann läuft für jede Änderung genau eine Runde update():
+ * Formular lesen -> buildUnattend() -> Vorschau, Zusammenfassung, Warnungen.
+ * Danach wird die Konfiguration verzögert im localStorage gesichert.
+ *
+ * Ein neues Feld ergänzen:
+ *   1. Bedienelement in index.html mit einer id anlegen.
+ *   2. Die id in TEXT_FIELDS (Eingaben, Auswahlen) oder BOOL_FIELDS
+ *      (Checkboxen) eintragen – damit wird sie automatisch gelesen,
+ *      geschrieben, importiert und gespeichert.
+ *   3. Falls das Feld andere Felder sperrt oder Auswahllisten füllt:
+ *      syncFieldStates() bzw. einen apply*-Handler ergänzen.
+ *   4. Die eigentliche XML-Ausgabe entsteht in generator.js.
  */
 (function () {
   'use strict';
@@ -9,11 +23,16 @@
   var G = window.UnattendGenerator;
   var STORAGE_KEY = 'unattend-generator.config.v1';
 
+  /* Vertrag zwischen HTML und Logik: Jede dieser ids muss es in index.html
+     geben. TEXT_FIELDS sind Eingabefelder und Auswahlen (immer Strings),
+     BOOL_FIELDS sind Checkboxen (immer true/false). Beide Listen werden von
+     readForm() und writeForm() verwendet; fehlt ein Feld dort, wird es beim
+     Speichern, Laden und Importieren stillschweigend ignoriert. */
   var TEXT_FIELDS = [
     'target', 'architecture', 'editionMode', 'editionValue', 'productKey',
     'serverVersion', 'serverEdition', 'serverInstallType',
     'computerName', 'owner', 'organization',
-    'uiLanguage', 'systemLocale', 'userLocale', 'inputLocale', 'timezone',
+    'uiLanguage', 'systemLocale', 'userLocale', 'inputLocale', 'inputLocale2', 'inputLocale3', 'timezone',
     'diskMode', 'diskId', 'partitionId',
     'userName', 'userDisplayName', 'userPassword', 'userGroup',
     'administratorPassword', 'autoLogonCount', 'protectYourPC',
@@ -34,7 +53,7 @@
     'preventAutomaticReboot', 'preventDeviceEncryption', 'hideEdgeFre', 'disableEdgeStartupBoost',
     'deleteEdgeDesktopIcon', 'disableAppSuggestions', 'allowPowerShellScripts', 'disableLastAccess',
     'classicContextMenu', 'leftTaskbar', 'hideTaskViewButton',
-    'staticIp'
+    'staticIp', 'oemProductKey', 'disableGameDvr'
   ];
 
   var form = document.getElementById('configForm');
@@ -76,23 +95,20 @@
       fillLanguageSelect(byId(id));
     });
     fillSimpleSelect(byId('inputLocale'), D.keyboards, 'id', 'label');
+    ['inputLocale2', 'inputLocale3'].forEach(function (id) {
+      var optional = document.createElement('option');
+      optional.value = '';
+      optional.textContent = 'kein weiteres Layout';
+      byId(id).appendChild(optional);
+      fillSimpleSelect(byId(id), D.keyboards, 'id', 'label');
+    });
     fillSimpleSelect(byId('timezone'), D.timezones, 'id', 'label');
     fillSimpleSelect(byId('serverVersion'), D.serverVersions, 'id', 'label');
     fillSimpleSelect(byId('serverEdition'), D.serverEditions, 'id', 'label');
     fillSimpleSelect(byId('serverInstallType'), D.serverInstallTypes, 'id', 'label');
     fillKeyPresets();
 
-    var standardEdition = document.createElement('option');
-    standardEdition.value = 'custom';
-    standardEdition.textContent = 'Standard / freie Eingabe';
-    byId('editionPreset').appendChild(standardEdition);
-
-    D.editionPresets.forEach(function (entry) {
-      var option = document.createElement('option');
-      option.value = entry.id;
-      option.textContent = entry.label;
-      byId('editionPreset').appendChild(option);
-    });
+    buildEditionOptions();
 
     var custom = document.createElement('option');
     custom.value = '';
@@ -134,6 +150,7 @@
       var element = byId(id);
       if (element) element.checked = !!merged[id];
     });
+    buildEditionOptions();
     syncEditionPreset();
     syncKeyPreset();
   }
@@ -163,12 +180,36 @@
     }
   }
 
-  /* Setzt Image-Namen und Zielversion aus einer LTSC-/IoT-Vorlage. */
+  /* Editionen werden nach Zielversion gefiltert angeboten. */
+  function buildEditionOptions() {
+    var select = byId('editionPreset');
+    var target = byId('target').value;
+    var entries = D.editionsFor(target);
+    var current = select.value;
+    var keep = entries.filter(function (entry) { return entry.id === current; })[0];
+
+    select.innerHTML = '';
+    var custom = document.createElement('option');
+    custom.value = 'custom';
+    custom.textContent = target === 'server'
+      ? 'wird aus Server-Version und -Edition erzeugt'
+      : 'Andere Edition / freie Eingabe';
+    select.appendChild(custom);
+
+    entries.forEach(function (entry) {
+      var option = document.createElement('option');
+      option.value = entry.id;
+      option.textContent = entry.image;
+      select.appendChild(option);
+    });
+    select.value = keep ? current : 'custom';
+  }
+
+  /* Setzt den Image-Namen aus der gewählten Edition. */
   function applyEditionPreset() {
     var id = byId('editionPreset').value;
-    var preset = D.editionPresets.filter(function (item) { return item.id === id; })[0];
+    var preset = D.editionsFor(byId('target').value).filter(function (item) { return item.id === id; })[0];
     if (!preset) return;
-    byId('target').value = preset.target;
     byId('editionMode').value = 'name';
     byId('editionValue').value = preset.image;
   }
@@ -178,51 +219,42 @@
     var select = byId('productKeyPreset');
     var none = document.createElement('option');
     none.value = '';
-    none.textContent = '– keiner, Setup fragen lassen –';
+    none.textContent = '– kein Katalogschlüssel –';
     select.appendChild(none);
 
-    var groups = [];
+    var groups = {};
     G.kmsKeys.forEach(function (entry) {
-      var group = groups.filter(function (item) { return item.name === entry.group; })[0];
+      var group = groups[entry.group];
       if (!group) {
-        var element = document.createElement('optgroup');
-        element.label = entry.group;
-        select.appendChild(element);
-        group = { name: entry.group, element: element };
-        groups.push(group);
+        group = document.createElement('optgroup');
+        group.label = entry.group;
+        select.appendChild(group);
+        groups[entry.group] = group;
       }
       var option = document.createElement('option');
       option.value = entry.id;
       option.textContent = entry.label;
-      group.element.appendChild(option);
+      group.appendChild(option);
     });
   }
 
-  /* Hält die KMS-Auswahl synchron, wenn der Schlüssel von Hand geändert wird. */
+  /* Hält die Auswahl synchron, wenn der Schlüssel von Hand geändert wird. */
   function syncKeyPreset() {
-    var value = byId('productKey').value.trim().toUpperCase();
-    var match = G.kmsKeys.filter(function (entry) { return entry.key === value; })[0];
+    var match = G.kmsKeyFor(byId('productKey').value);
     byId('productKeyPreset').value = match ? match.id : '';
   }
 
-  /* Trägt einen Katalogschlüssel ein; „keiner“ entfernt nur Katalogschlüssel. */
+  /* Trägt den gewählten Schlüssel ein; „kein Katalogschlüssel“ leert das Feld. */
   function applyKeyPreset() {
     var id = byId('productKeyPreset').value;
     var entry = G.kmsKeys.filter(function (item) { return item.id === id; })[0];
-    var field = byId('productKey');
-    if (entry) {
-      field.value = entry.key;
-      return;
-    }
-    var current = field.value.trim().toUpperCase();
-    var isCatalogKey = G.kmsKeys.some(function (item) { return item.key === current; });
-    if (isCatalogKey) field.value = '';
+    byId('productKey').value = entry ? entry.key : '';
   }
 
   /* Hält die Vorlagenauswahl synchron, wenn der Name von Hand geändert wird. */
   function syncEditionPreset() {
     var value = byId('editionValue').value.trim();
-    var match = D.editionPresets.filter(function (item) { return item.image === value; })[0];
+    var match = D.editionsFor(byId('target').value).filter(function (item) { return item.image === value; })[0];
     byId('editionPreset').value = match ? match.id : 'custom';
   }
 
@@ -238,6 +270,11 @@
 
     var editionChosen = byId('editionMode').value !== 'choose';
     byId('editionValue').disabled = !editionChosen;
+
+    /* Mit Firmware-Schlüssel sind Schlüsselfeld und Katalog ohne Wirkung. */
+    var oemKey = byId('oemProductKey').checked;
+    lockField('productKey', oemKey);
+    lockField('productKeyPreset', oemKey);
 
     var autoLogon = byId('autoLogon').checked;
     byId('autoLogonCount').disabled = !autoLogon;
@@ -292,6 +329,8 @@
 
   var saveTimer = null;
 
+  /* Zentrale Renderschleife: wird bei jeder Eingabe aufgerufen und ist der
+     einzige Ort, der Vorschau, Warnungen und Speicherung aktualisiert. */
   function update() {
     syncFieldStates();
     var cfg = readForm();
@@ -370,6 +409,7 @@
   function applyPreset(id) {
     var preset = D.presets.filter(function (item) { return item.id === id; })[0];
     if (!preset) return;
+    presetSelect.value = id;
     var cfg = G.defaults();
     Object.keys(preset.config).forEach(function (key) { cfg[key] = preset.config[key]; });
     writeForm(cfg);
@@ -428,6 +468,9 @@
       if (event.target && event.target.id === 'editionPreset') {
         applyEditionPreset();
       }
+      if (event.target && event.target.id === 'target') {
+        buildEditionOptions();
+      }
       if (event.target && ['target', 'serverVersion', 'serverEdition', 'serverInstallType'].indexOf(event.target.id) !== -1) {
         applyServerImage();
       }
@@ -453,7 +496,6 @@
 
     byId('btnReset').addEventListener('click', function () {
       try { localStorage.removeItem(STORAGE_KEY); } catch (error) { /* egal */ }
-      presetSelect.value = D.presets[0].id;
       applyPreset(D.presets[0].id);
     });
 
@@ -476,8 +518,30 @@
 
   /* ------------------------------------------------------------ Start */
 
+  /* Schnellprofile: ein Klick setzt eine ganze Konfiguration. */
+  function buildQuickProfiles() {
+    var container = byId('quickProfiles');
+    D.quickProfiles.forEach(function (profile) {
+      var button = document.createElement('button');
+      button.type = 'button';
+
+      var title = document.createElement('strong');
+      title.textContent = profile.label;
+      var description = document.createElement('span');
+      description.textContent = profile.description;
+
+      button.appendChild(title);
+      button.appendChild(description);
+      button.addEventListener('click', function () {
+        applyPreset(profile.preset);
+      });
+      container.appendChild(button);
+    });
+  }
+
   buildSelects();
   bind();
+  buildQuickProfiles();
 
   if (!loadStored()) {
     presetSelect.value = D.presets[0].id;
