@@ -4,7 +4,7 @@ Erzeugt eine `autounattend.xml` für die unbeaufsichtigte Installation von Windo
 
 ## Funktionsumfang
 
-- Zielversion: Windows 11, Windows 10 oder Windows Server 2016–2025 mit Edition (Standard, Datacenter, Datacenter: Azure Edition) und Installationsvariante (Server Core oder Desktop Experience); Architektur x64, x86 oder ARM64; Edition per gefilterter Liste, Index, Name oder interaktiv
+- Zielversion: Windows 11, Windows 10 oder Windows Server 2016–2025 mit Edition (Standard, Datacenter, Essentials bei 2016/2019, Datacenter: Azure Edition bei 2022/2025) und Installationsvariante (Server Core oder Desktop Experience); Architektur x64, x86 oder ARM64; Edition per gefilterter Liste, Index, Name oder interaktiv
 - Vier Schnellprofile (Standard, Unternehmen, Datenschutz, Gaming), die eine komplette Grundkonfiguration in einem Klick setzen
 - Eigene Vorlagen für Windows 10 Enterprise/IoT Enterprise LTSC 2019 und 2021 sowie Windows 11 Enterprise/IoT Enterprise LTSC 2024, inklusive der passenden Image-Namen und editionsabhängiger Prüfungen (Details unter „LTSC, IoT Enterprise und Azure Edition“)
 - Sprache, Zeitzone und bis zu drei Tastaturlayouts (das erste ist das Standardlayout) für Setup und installiertes System
@@ -122,6 +122,8 @@ Diese Editionen heißen im Medium anders als die „normalen“ Images, deshalb 
 | Windows 10 IoT Enterprise LTSC 2021 | `Windows 10 IoT Enterprise LTSC 2021` |
 | Windows 11 Enterprise LTSC 2024 | `Windows 11 Enterprise LTSC 2024` |
 | Windows 11 IoT Enterprise LTSC 2024 | `Windows 11 IoT Enterprise LTSC 2024` |
+
+Die Editionen richten sich nach der gewählten Server-Version: **Essentials** gibt es nur für Server 2016 und 2019, **Datacenter: Azure Edition** erst ab Server 2022. Beide Felder („Server-Edition“ und „Edition“) bieten deshalb nur die passenden Einträge an; eine unpassende Kombination aus einer importierten Konfiguration wird als Fehler gemeldet.
 
 Für **Windows Server Datacenter: Azure Edition** gibt es keine Client-Vorlage, sondern einen zusätzlichen Eintrag in „Server-Edition“. Der Image-Name wird wie bei den anderen Server-Editionen aus Version, Edition und Variante gebaut, also `Windows Server 2025 Datacenter: Azure Edition` bzw. `… (Desktop Experience)`. Azure Edition unterstützt beide Installationsvarianten, ist aber eine reine Virtualisierungs-Edition: Sie wird nur in Azure bzw. über Evaluierungsmedien ausgeliefert und über Azure aktiviert. Dazu gibt es eine eigene Vorlage (`Windows Server 2025 – Datacenter: Azure Edition, Server Core`).
 

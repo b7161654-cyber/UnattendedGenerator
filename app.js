@@ -92,6 +92,21 @@
     select.appendChild(fragment);
   }
 
+  /* Server-Editionen hängen an der Version (Essentials bis 2019, Azure
+     Edition ab 2022). Die Liste wird deshalb bei jedem Versionswechsel neu
+     gefüllt; eine nicht mehr gültige Edition fällt auf die erste zurück. */
+  function buildServerEditionOptions(preferred) {
+    var select = byId('serverEdition');
+    var entries = D.serverEditionsFor(byId('serverVersion').value);
+    var keep = preferred === undefined ? select.value : preferred;
+    select.innerHTML = '';
+    fillSimpleSelect(select, entries, 'id', 'label');
+    select.value = entries.some(function (entry) { return entry.id === keep; })
+      ? keep
+      : entries[0].id;
+    return select.value;
+  }
+
   function buildSelects() {
     ['uiLanguage', 'systemLocale', 'userLocale'].forEach(function (id) {
       fillLanguageSelect(byId(id));
@@ -106,7 +121,7 @@
     });
     fillSimpleSelect(byId('timezone'), D.timezones, 'id', 'label');
     fillSimpleSelect(byId('serverVersion'), D.serverVersions, 'id', 'label');
-    fillSimpleSelect(byId('serverEdition'), D.serverEditions, 'id', 'label');
+    buildServerEditionOptions('Standard');
     fillSimpleSelect(byId('serverInstallType'), D.serverInstallTypes, 'id', 'label');
     fillKeyPresets();
 
@@ -152,6 +167,7 @@
       var element = byId(id);
       if (element) element.checked = !!merged[id];
     });
+    buildServerEditionOptions(merged.serverEdition);
     buildEditionOptions();
     syncEditionPreset();
     syncKeyPreset();
@@ -182,34 +198,51 @@
     }
   }
 
-  /* Editionen werden nach Zielversion gefiltert angeboten. */
+  /* Editionen werden nach Zielversion gefiltert angeboten. Bei Windows Server
+     sind es die Server-Editionen der gewählten Version; die Wahl dort setzt
+     „Server-Edition“, und der Image-Name entsteht aus Version, Edition und
+     Installationsvariante. */
   function buildEditionOptions() {
     var select = byId('editionPreset');
     var target = byId('target').value;
-    var entries = D.editionsFor(target);
+    var server = target === 'server';
+    var entries = server
+      ? D.serverEditionsFor(byId('serverVersion').value)
+      : D.editionsFor(target);
     var current = select.value;
     var keep = entries.filter(function (entry) { return entry.id === current; })[0];
 
     select.innerHTML = '';
-    var custom = document.createElement('option');
-    custom.value = 'custom';
-    custom.textContent = target === 'server'
-      ? 'wird aus Server-Version und -Edition erzeugt'
-      : 'Andere Edition / freie Eingabe';
-    select.appendChild(custom);
+    if (!server) {
+      var custom = document.createElement('option');
+      custom.value = 'custom';
+      custom.textContent = 'Andere Edition / freie Eingabe';
+      select.appendChild(custom);
+    }
 
     entries.forEach(function (entry) {
       var option = document.createElement('option');
       option.value = entry.id;
-      option.textContent = entry.image;
+      option.textContent = server ? entry.label : entry.image;
       select.appendChild(option);
     });
+
+    if (server) {
+      var chosen = byId('serverEdition').value;
+      select.value = entries.some(function (entry) { return entry.id === chosen; }) ? chosen : entries[0].id;
+      return;
+    }
     select.value = keep ? current : 'custom';
   }
 
   /* Setzt den Image-Namen aus der gewählten Edition. */
   function applyEditionPreset() {
     var id = byId('editionPreset').value;
+    if (byId('target').value === 'server') {
+      byId('serverEdition').value = id;
+      applyServerImage();
+      return;
+    }
     var preset = D.editionsFor(byId('target').value).filter(function (item) { return item.id === id; })[0];
     if (!preset) return;
     byId('editionMode').value = 'name';
@@ -255,6 +288,15 @@
 
   /* Hält die Vorlagenauswahl synchron, wenn der Name von Hand geändert wird. */
   function syncEditionPreset() {
+    if (byId('target').value === 'server') {
+      var select = byId('editionPreset');
+      var edition = byId('serverEdition').value;
+      var offered = Array.prototype.some.call(select.options, function (option) {
+        return option.value === edition;
+      });
+      if (offered) select.value = edition;
+      return;
+    }
     var value = byId('editionValue').value.trim();
     var match = D.editionsFor(byId('target').value).filter(function (item) { return item.image === value; })[0];
     byId('editionPreset').value = match ? match.id : 'custom';
@@ -268,7 +310,6 @@
     ['serverVersion', 'serverEdition', 'serverInstallType'].forEach(function (id) {
       lockField(id, !server);
     });
-    lockField('editionPreset', server);
 
     var editionChosen = byId('editionMode').value !== 'choose';
     byId('editionValue').disabled = !editionChosen;
@@ -559,7 +600,10 @@
       if (event.target && event.target.id === 'editionPreset') {
         applyEditionPreset();
       }
-      if (event.target && event.target.id === 'target') {
+      if (event.target && event.target.id === 'serverVersion') {
+        buildServerEditionOptions();
+      }
+      if (event.target && ['target', 'serverVersion'].indexOf(event.target.id) !== -1) {
         buildEditionOptions();
       }
       if (event.target && ['target', 'serverVersion', 'serverEdition', 'serverInstallType'].indexOf(event.target.id) !== -1) {

@@ -112,7 +112,7 @@
         <label class="field wide" id="editionPresetField">
           <span>Edition (gefiltert nach Zielversion)</span>
           <select id="editionPreset"></select>
-          <small>Setzt den Image-Namen für die Installation. Der Name bleibt editierbar, muss aber exakt dem Image auf dem Medium entsprechen – bitte mit <code>dism /Get-WimInfo</code> gegenprüfen.</small>
+          <small>Setzt den Image-Namen für die Installation. Bei Windows Server stehen hier die Server-Editionen der gewählten Version (Essentials bis 2019, Datacenter: Azure Edition ab 2022); der Name wird aus Version, Edition und Variante gebaut. Er bleibt editierbar, muss aber exakt dem Image auf dem Medium entsprechen – bitte mit <code>dism /Get-WimInfo</code> gegenprüfen.</small>
         </label>
         <label class="field wide">
           <span>Index oder Name</span>

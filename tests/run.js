@@ -887,6 +887,57 @@ test('Azure-Vorlage erzeugt eine Server-Datei ohne Client-Block', function () {
   assertWellFormed(xml);
 });
 
+test('Server-Editionen passen zur Server-Version', function () {
+  function ids(version) {
+    return D.serverEditionsFor(version).map(function (entry) { return entry.id; });
+  }
+  ['2016', '2019'].forEach(function (version) {
+    assert.ok(ids(version).indexOf('Essentials') !== -1, 'Essentials fehlt für ' + version);
+    assert.strictEqual(ids(version).indexOf('Datacenter: Azure Edition'), -1,
+      'Azure Edition gibt es für ' + version + ' nicht');
+  });
+  ['2022', '2025'].forEach(function (version) {
+    assert.ok(ids(version).indexOf('Datacenter: Azure Edition') !== -1, 'Azure Edition fehlt für ' + version);
+    assert.strictEqual(ids(version).indexOf('Essentials'), -1, 'Essentials gibt es für ' + version + ' nicht');
+  });
+  ['2016', '2019', '2022', '2025'].forEach(function (version) {
+    assert.ok(ids(version).indexOf('Standard') !== -1, 'Standard fehlt für ' + version);
+    assert.ok(ids(version).indexOf('Datacenter') !== -1, 'Datacenter fehlt für ' + version);
+  });
+
+  assert.strictEqual(D.serverImageName('2019', 'Essentials', 'core'), 'Windows Server 2019 Essentials');
+  assert.strictEqual(G.normalize({ serverEdition: 'Essentials' }).serverEdition, 'Essentials',
+    'Essentials wurde beim Normalisieren verworfen');
+  has(build({
+    target: 'server', serverVersion: '2019', serverEdition: 'Essentials',
+    editionMode: 'name', editionValue: 'Windows Server 2019 Essentials'
+  }), '<Value>Windows Server 2019 Essentials</Value>');
+
+  function editionIssue(overrides) {
+    var base = G.defaults();
+    base.target = 'server';
+    base.administratorPassword = 'X1';
+    Object.keys(overrides).forEach(function (key) { base[key] = overrides[key]; });
+    return G.issues(base).filter(function (item) {
+      return item.text.indexOf('gibt es nur für Windows Server') !== -1;
+    })[0];
+  }
+
+  var essentials = editionIssue({ serverVersion: '2025', serverEdition: 'Essentials' });
+  assert.ok(essentials, 'Meldung zu Essentials bei Server 2025 fehlt');
+  assert.strictEqual(essentials.level, 'error');
+  assert.strictEqual(essentials.field, 'serverEdition');
+
+  var azure = editionIssue({ serverVersion: '2016', serverEdition: 'Datacenter: Azure Edition' });
+  assert.ok(azure, 'Meldung zu Azure Edition bei Server 2016 fehlt');
+  assert.strictEqual(azure.field, 'serverEdition');
+
+  assert.strictEqual(editionIssue({ serverVersion: '2019', serverEdition: 'Essentials' }), undefined,
+    'Gültige Kombination darf keine Meldung erzeugen');
+  assert.strictEqual(editionIssue({ serverVersion: '2025', serverEdition: 'Datacenter: Azure Edition' }), undefined,
+    'Gültige Kombination darf keine Meldung erzeugen');
+});
+
 test('Windows 11 IoT LTSC: keine TPM-/GPT-Warnung, Bypässe unnötig', function () {
   var base = {
     target: 'windows11', editionMode: 'name', editionValue: 'Windows 11 IoT Enterprise LTSC 2024',

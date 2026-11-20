@@ -116,11 +116,22 @@ var UnattendData = (function () {
     { id: '2016', label: 'Windows Server 2016' }
   ];
 
+  /* Server-Editionen mit der Einschränkung, für welche Versionen es sie gibt:
+     Essentials endet mit Server 2019, Datacenter: Azure Edition gibt es erst
+     ab Server 2022. Ohne `versions` gilt der Eintrag für alle Versionen. */
   var SERVER_EDITIONS = [
     { id: 'Standard', label: 'Standard' },
     { id: 'Datacenter', label: 'Datacenter' },
-    { id: 'Datacenter: Azure Edition', label: 'Datacenter: Azure Edition' }
+    { id: 'Datacenter: Azure Edition', label: 'Datacenter: Azure Edition', versions: ['2022', '2025'] },
+    { id: 'Essentials', label: 'Essentials', versions: ['2016', '2019'] }
   ];
+
+  /* Editionen, die es für die gewählte Server-Version tatsächlich gibt. */
+  function serverEditionsFor(version) {
+    return SERVER_EDITIONS.filter(function (entry) {
+      return !entry.versions || entry.versions.indexOf(version) !== -1;
+    });
+  }
 
   /* Bekannte Client-Image-Namen für LTSC und IoT Enterprise. Der Name muss
      exakt dem Image auf dem Medium entsprechen – daher bleibt das Feld
@@ -460,6 +471,7 @@ var UnattendData = (function () {
     presets: PRESETS,
     serverVersions: SERVER_VERSIONS,
     serverEditions: SERVER_EDITIONS,
+    serverEditionsFor: serverEditionsFor,
     serverInstallTypes: SERVER_INSTALL_TYPES,
     serverImageName: serverImageName,
     editionsFor: editionsFor,

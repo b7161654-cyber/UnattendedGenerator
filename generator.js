@@ -160,7 +160,7 @@
   var ARCHITECTURES = ['amd64', 'x86', 'arm64'];
   var TARGETS = ['windows11', 'windows10', 'server'];
   var SERVER_VERSIONS = ['2016', '2019', '2022', '2025'];
-  var SERVER_EDITIONS = ['Standard', 'Datacenter', 'Datacenter: Azure Edition'];
+  var SERVER_EDITIONS = ['Standard', 'Datacenter', 'Datacenter: Azure Edition', 'Essentials'];
   var SERVER_INSTALL_TYPES = ['core', 'desktop'];
   var EDITION_MODES = ['index', 'name', 'choose'];
   var DISK_MODES = ['gpt', 'mbr', 'existing', 'partition'];
@@ -1274,6 +1274,19 @@
       if (cfg.editionMode === 'choose') {
         add('hint', 'Ohne <ProductKey> erscheint die Schlüssel-/Editionsseite nur, wenn im BIOS kein Schlüssel hinterlegt ist. Sonst entscheidet der Firmware-Schlüssel über die Edition.', 'oemProductKey');
       }
+    }
+
+    /* Manche Server-Editionen gibt es nur für bestimmte Versionen: Essentials
+       endet mit 2019, Datacenter: Azure Edition beginnt mit 2022. */
+    var editionVersions = {
+      'Essentials': ['2016', '2019'],
+      'Datacenter: Azure Edition': ['2022', '2025']
+    };
+    if (isServer(cfg) && editionVersions[cfg.serverEdition] &&
+        editionVersions[cfg.serverEdition].indexOf(cfg.serverVersion) === -1) {
+      add('error', '„' + cfg.serverEdition + '“ gibt es nur für Windows Server ' +
+        editionVersions[cfg.serverEdition].join(' und ') + ', die Zielversion ist ' + cfg.serverVersion + '.',
+        'serverEdition');
     }
 
     var imageVersion = (/^Windows (10|11)\b/i.exec(cfg.editionValue) || [])[1];
