@@ -123,7 +123,7 @@ Diese Editionen heißen im Medium anders als die „normalen“ Images, deshalb 
 | Windows 11 Enterprise LTSC 2024 | `Windows 11 Enterprise LTSC 2024` |
 | Windows 11 IoT Enterprise LTSC 2024 | `Windows 11 IoT Enterprise LTSC 2024` |
 
-Die Editionen richten sich nach der gewählten Server-Version: **Essentials** gibt es nur für Server 2016 und 2019, **Datacenter: Azure Edition** erst ab Server 2022. Beide Felder („Server-Edition“ und „Edition“) bieten deshalb nur die passenden Einträge an; eine unpassende Kombination aus einer importierten Konfiguration wird als Fehler gemeldet.
+Die Editionen richten sich nach der gewählten Server-Version: **Essentials** gibt es nur für Server 2016 und 2019, **Datacenter: Azure Edition** erst ab Server 2022. Beide Felder („Server-Edition“ und „Edition“) bieten deshalb nur die passenden Einträge an; eine unpassende Kombination aus einer importierten Konfiguration wird als Fehler gemeldet. Essentials gibt es nur mit Oberfläche: Die Installationsvariante ist dort festgelegt, und der Image-Name steht ohne Zusatz in der Datei (`Windows Server 2019 Essentials`).
 
 Für **Windows Server Datacenter: Azure Edition** gibt es keine Client-Vorlage, sondern einen zusätzlichen Eintrag in „Server-Edition“. Der Image-Name wird wie bei den anderen Server-Editionen aus Version, Edition und Variante gebaut, also `Windows Server 2025 Datacenter: Azure Edition` bzw. `… (Desktop Experience)`. Azure Edition unterstützt beide Installationsvarianten, ist aber eine reine Virtualisierungs-Edition: Sie wird nur in Azure bzw. über Evaluierungsmedien ausgeliefert und über Azure aktiviert. Dazu gibt es eine eigene Vorlage (`Windows Server 2025 – Datacenter: Azure Edition, Server Core`).
 

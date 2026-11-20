@@ -184,6 +184,8 @@
   function applyServerImage() {
     if (byId('target').value === 'server') {
       byId('editionMode').value = 'name';
+      /* Essentials gibt es nur mit Oberfläche – Server Core wäre dort falsch. */
+      if (byId('serverEdition').value === 'Essentials') byId('serverInstallType').value = 'desktop';
       byId('editionValue').value = D.serverImageName(
         byId('serverVersion').value,
         byId('serverEdition').value,
@@ -307,9 +309,11 @@
     lockField('partitionId', !partitionMode);
 
     var server = byId('target').value === 'server';
-    ['serverVersion', 'serverEdition', 'serverInstallType'].forEach(function (id) {
+    ['serverVersion', 'serverEdition'].forEach(function (id) {
       lockField(id, !server);
     });
+    /* Essentials kennt nur eine Variante mit Oberfläche. */
+    lockField('serverInstallType', !server || byId('serverEdition').value === 'Essentials');
 
     var editionChosen = byId('editionMode').value !== 'choose';
     byId('editionValue').disabled = !editionChosen;

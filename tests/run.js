@@ -906,6 +906,8 @@ test('Server-Editionen passen zur Server-Version', function () {
   });
 
   assert.strictEqual(D.serverImageName('2019', 'Essentials', 'core'), 'Windows Server 2019 Essentials');
+  assert.strictEqual(D.serverImageName('2019', 'Essentials', 'desktop'), 'Windows Server 2019 Essentials',
+    'Essentials steht auf dem Medium ohne Variantenzusatz');
   assert.strictEqual(G.normalize({ serverEdition: 'Essentials' }).serverEdition, 'Essentials',
     'Essentials wurde beim Normalisieren verworfen');
   has(build({

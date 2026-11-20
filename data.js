@@ -177,9 +177,12 @@ var UnattendData = (function () {
   ];
 
   /* Windows Setup erwartet die Image-Namen genau in dieser Schreibweise:
-     "Windows Server 2022 Standard" bzw. "... Standard (Desktop Experience)". */
+     "Windows Server 2022 Standard" bzw. "... Standard (Desktop Experience)".
+     Essentials gibt es nur mit Oberfläche; das Medium führt das Image ohne
+     Zusatz, deshalb entfällt dort die Variante im Namen. */
   function serverImageName(version, edition, installType) {
     var name = 'Windows Server ' + version + ' ' + edition;
+    if (edition === 'Essentials') return name;
     return installType === 'desktop' ? name + ' (Desktop Experience)' : name;
   }
 
